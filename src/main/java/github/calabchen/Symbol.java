@@ -1,10 +1,11 @@
 package github.calabchen;
 
-
 public enum Symbol {
-    nul, ident, number, plus, minus, times, slash,
-    oddsym, eql, neq, lss, leq, gtr, geq, lparen, rparen,
+    nul, ident, number,
+    plus, minus, times, slash,
+    eql, neq, lss, leq, gtr, geq,
+    lparen, rparen, lbrace, rbrace,
     comma, semicolon, period, becomes,
-    beginsym, endsym, ifsym, thensym, whilesym, writesym,
-    readsym, dosym, callsym, constsym, varsym, procsym
+    ifsym, elsesym, whilesym, inputsym, outputsym,
+    returnsym, letsym, funcsym, programsym, mainsym
 }

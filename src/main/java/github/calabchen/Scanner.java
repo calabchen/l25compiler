@@ -8,26 +8,21 @@ public class Scanner {
 
     private char ch = ' ';
 
-
     private char[] line;
 
     public int ll = 0;
 
-
     public int cc = 0;
-
 
     public Symbol sym;
 
-    private String[] word;
+    final private String[] word;
 
+    final private Symbol[] wsym;
 
-    private Symbol[] wsym;
+    final private Symbol[] ssym;
 
-
-    private Symbol[] ssym;
-
-    private BufferedReader in;
+    final private BufferedReader in;
 
     public String id;
 
@@ -46,31 +41,29 @@ public class Scanner {
         ssym['/'] = Symbol.slash;
         ssym['('] = Symbol.lparen;
         ssym[')'] = Symbol.rparen;
-        ssym['='] = Symbol.eql;
+        ssym['{'] = Symbol.lbrace;
+        ssym['}'] = Symbol.rbrace;
         ssym[','] = Symbol.comma;
         ssym['.'] = Symbol.period;
-        ssym['#'] = Symbol.neq;
         ssym[';'] = Symbol.semicolon;
+        ssym['='] = Symbol.nul;
+        ssym['!'] = Symbol.nul;
 
 
-        word = new String[]{"begin", "call", "const", "do", "end", "if",
-                "odd", "procedure", "read", "then", "var", "while", "write"};
+        word = new String[]{"program", "func", "if",
+                "main", "input", "else", "let", "while", "output"};
 
 
         wsym = new Symbol[L25.norw];
-        wsym[0] = Symbol.beginsym;
-        wsym[1] = Symbol.callsym;
-        wsym[2] = Symbol.constsym;
-        wsym[3] = Symbol.dosym;
-        wsym[4] = Symbol.endsym;
+        wsym[0] = Symbol.programsym;
+        wsym[1] = Symbol.funcsym;
+        wsym[2] = Symbol.mainsym;
+        wsym[3] = Symbol.inputsym;
+        wsym[4] = Symbol.outputsym;
         wsym[5] = Symbol.ifsym;
-        wsym[6] = Symbol.oddsym;
-        wsym[7] = Symbol.procsym;
-        wsym[8] = Symbol.readsym;
-        wsym[9] = Symbol.thensym;
-        wsym[10] = Symbol.varsym;
-        wsym[11] = Symbol.whilesym;
-        wsym[12] = Symbol.writesym;
+        wsym[6] = Symbol.elsesym;
+        wsym[7] = Symbol.whilesym;
+        wsym[8] = Symbol.letsym;
     }
 
 
@@ -78,7 +71,7 @@ public class Scanner {
         String l = "";
         try {
             if (cc == ll) {
-                while (l.equals(""))
+                while (l.isEmpty())
                     l = in.readLine().toLowerCase() + "\n";
                 ll = l.length();
                 cc = 0;
@@ -87,7 +80,7 @@ public class Scanner {
                 L25.fa1.println(L25.interp.cx + " " + l);
             }
         } catch (IOException e) {
-            throw new Error("program imcomplete");
+            throw new Error("program incomplete");
         }
         ch = line[cc];
         cc++;
@@ -99,10 +92,8 @@ public class Scanner {
         while (Character.isWhitespace(ch))
             getch();
         if (ch >= 'a' && ch <= 'z') {
-
             matchKeywordOrIdentifier();
         } else if (ch >= '0' && ch <= '9') {
-
             matchNumber();
         } else {
 
@@ -153,13 +144,21 @@ public class Scanner {
     void matchOperator() {
 
         switch (ch) {
-            case ':':
+            case '=':
                 getch();
                 if (ch == '=') {
-                    sym = Symbol.becomes;
-                    getch();
+                    sym = Symbol.eql;
+                     getch();
                 } else {
-
+                    sym = Symbol.becomes;
+                }
+                break;
+            case '!':
+                getch();
+                if (ch == '=') {
+                    sym = Symbol.neq;
+                     getch();
+                } else {
                     sym = Symbol.nul;
                 }
                 break;
@@ -183,8 +182,7 @@ public class Scanner {
                 break;
             default:
                 sym = ssym[ch];
-                if (sym != Symbol.period)
-                    getch();
+                getch();
                 break;
         }
     }

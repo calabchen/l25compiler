@@ -25,18 +25,19 @@ public class Parser {
 
 
         declbegsys = new SymSet(symnum);
-        declbegsys.set(Symbol.constsym);
-        declbegsys.set(Symbol.varsym);
-        declbegsys.set(Symbol.procsym);
+        declbegsys.set(Symbol.programsym);
+        declbegsys.set(Symbol.mainsym);
+        declbegsys.set(Symbol.letsym);
+        declbegsys.set(Symbol.funcsym);
+        declbegsys.set(Symbol.returnsym);
 
 
         statbegsys = new SymSet(symnum);
-        statbegsys.set(Symbol.beginsym);
-        statbegsys.set(Symbol.callsym);
         statbegsys.set(Symbol.ifsym);
+        statbegsys.set(Symbol.elsesym);
         statbegsys.set(Symbol.whilesym);
-        statbegsys.set(Symbol.readsym);
-        statbegsys.set(Symbol.writesym);
+        statbegsys.set(Symbol.inputsym);
+        statbegsys.set(Symbol.outputsym);
 
 
         facbegsys = new SymSet(symnum);
@@ -113,7 +114,7 @@ public class Parser {
             }
 
 
-            if (sym == Symbol.varsym) {
+            if (sym == Symbol.letsym) {
                 nextSym();
                 // the original do...while(sym == ident) is problematic, thanks to calculous
                 // do {

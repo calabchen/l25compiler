@@ -70,27 +70,27 @@ public class L25 {
         try {
 
             fname = "";
-            System.out.print("Input pl/0 file?   ");
-            while (fname.equals(""))
+            System.out.print("Input L25 file?   ");
+            while (fname.isEmpty())
                 fname = stdin.readLine();
             fin = new BufferedReader(new FileReader(fname), 4096);
 
 
             fname = "";
             System.out.print("List object code?(Y/N)");
-            while (fname.equals(""))
+            while (fname.isEmpty())
                 fname = stdin.readLine();
             L25.listswitch = (fname.charAt(0) == 'y' || fname.charAt(0) == 'Y');
 
 
             fname = "";
             System.out.print("List symbol table?(Y/N)");
-            while (fname.equals(""))
+            while (fname.isEmpty())
                 fname = stdin.readLine();
             L25.tableswitch = (fname.charAt(0) == 'y' || fname.charAt(0) == 'Y');
 
             L25.fa1 = new PrintStream("fa1.tmp");
-            L25.fa1.println("Input pl/0 file?   " + fname);
+            L25.fa1.println("Input L25 file?   " + fname);
 
 
             L25 l25 = new L25(fin);
@@ -101,7 +101,7 @@ public class L25 {
                 interp.interpret();
                 L25.fa2.close();
             } else {
-                System.out.print("Errors in pl/0 program");
+                System.out.print("Errors in L25 program");
             }
 
         } catch (IOException e) {
