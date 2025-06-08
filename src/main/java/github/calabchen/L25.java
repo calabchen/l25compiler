@@ -1,6 +1,7 @@
 package github.calabchen;
 
 import java.io.*;
+import java.nio.file.Paths;
 
 /**
  * 这个版本的 L25语言 编译器根据 C/java 语言的 PL0 版本改写而成。
@@ -35,6 +36,12 @@ public class L25 {
     // 为避免多次创建BufferedReader，使用全局统一的标准输入
     public static BufferedReader stdin;
 
+    // 设置项目预先设置的目录和文件名
+    public static String projectRoot;
+    public static String testDir;
+
+    public static String docDir;
+
     /**
      * 构造函数，初始化编译器所有组成部分
      *
@@ -56,14 +63,15 @@ public class L25 {
         boolean abort = false;
 
         try {
-            L25.fa = new PrintStream("fa.tmp");
-            L25.fas = new PrintStream("fas.tmp");
+            L25.fa = new PrintStream(Paths.get(testDir, "fa.tmp").toString());
+            L25.fas = new PrintStream(Paths.get(testDir, "fas.tmp").toString());
             parser.nextSym();           // 前瞻分析需要预先读入一个符号
             parser.parse();             // 开始语法分析过程（连同语法检查、目标代码生成）
         } catch (Error e) {
             // 如果是发生严重错误则直接中止
             abort = true;
         } catch (IOException e) {
+            System.err.println("IO Exception during compilation: " + e.getMessage());
         } finally {
             L25.fa.close();
             L25.fa1.close();
@@ -81,20 +89,21 @@ public class L25 {
      * 主函数
      */
     public static void main(String[] args) {
-
-        String fname = "";
+        String fname;
         stdin = new BufferedReader(new InputStreamReader(System.in));
         BufferedReader fin;
         try {
-            // 输入文件名
-            fname = "D:\\Code\\l25compiler\\src\\main\\java\\github\\calabchen\\";
-            String ftest = "";
+            // 获取当前工作目录
+            projectRoot = System.getProperty("user.dir");
+            // 获取测试代码目录
+            testDir = Paths.get(projectRoot, "l25testcode").toString();
 
+            // 输入文件名
+            fname = "";
             System.out.print("Input L25 file?   ");
-            while (ftest.isEmpty())
-                ftest = stdin.readLine();
-            String all_file = fname + ftest;
-            fin = new BufferedReader(new FileReader(all_file), 4096);
+            while (fname.isEmpty())
+                fname = stdin.readLine();
+            fin = new BufferedReader(new FileReader(Paths.get(L25.testDir, fname).toFile()), 4096);
 
             // 是否输出虚拟机代码
             fname = "";
@@ -110,24 +119,22 @@ public class L25 {
                 fname = stdin.readLine();
             L25.tableswitch = (fname.charAt(0) == 'y' || fname.charAt(0) == 'Y');
 
-            L25.fa1 = new PrintStream("fa1.tmp");
+            L25.fa1 = new PrintStream(Paths.get(testDir, "fa1.tmp").toString());
             L25.fa1.println("Input L25 file?   " + fname);
 
             // 构造编译器并初始化
             L25 l25 = new L25(fin);
-
             if (l25.compile()) {
                 // 如果成功编译则接着解释运行
-                L25.fa2 = new PrintStream("fa2.tmp");
+                L25.fa2 = new PrintStream(Paths.get(testDir, "fa2.tmp").toString());
                 interp.interpret();
                 L25.fa2.close();
             } else {
-                System.out.print("Errors in L25 program");
+                System.out.println("Errors in L25 program");
             }
         } catch (IOException e) {
             System.out.println("Can't open file!");
         }
-
         System.out.println();
     }
 }

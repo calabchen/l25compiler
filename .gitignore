@@ -36,3 +36,6 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+### L25 result files ###
+/l25testcode/**/*.tmp
