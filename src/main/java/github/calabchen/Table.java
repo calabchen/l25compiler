@@ -83,7 +83,7 @@ public class Table {
         if (start >= tx)
             System.out.println("    NULL");
 
-        for (int i = start + 1; i <= tx; i++) {
+        for (int i = start; i <= tx; i++) {
             Item currentItem = table[i];
 
             String kindString;
@@ -93,7 +93,7 @@ public class Table {
                 case variable:
                     kindString = "var";
                     // 格式：序号 | kind | name | lev=level | addr=adr
-                    String varLine = String.format("%2d %5s %-5s lev=%2d addr=%2d",
+                    String varLine = String.format("%2d %5s %-10s lev=%2d addr=%3d",
                             i, kindString, name, currentItem.level, currentItem.adr);
                     System.out.println(varLine);
                     L25.fas.println(varLine);
@@ -101,7 +101,7 @@ public class Table {
                 case function:
                     kindString = "func";
                     // 格式：序号 | kind | name | lev=level | size=size
-                    String funcLine = String.format("%2d %5s %-5s lev=%2d size=%2d",
+                    String funcLine = String.format("%2d %5s %-10s lev=%2d size=%3d",
                             i, kindString, name, currentItem.level, currentItem.size);
                     System.out.println(funcLine);
                     L25.fas.println(funcLine);
@@ -109,7 +109,7 @@ public class Table {
                 case mainfunc:
                     kindString = "main";
                     // 格式：序号 | kind | name | lev=level | size=size
-                    String mainLine = String.format("%2d %5s %-5s lev=%2d size=%2d",
+                    String mainLine = String.format("%2d %5s %-10s lev=%2d size=%3d",
                             i, kindString, name, currentItem.level, currentItem.size);
                     System.out.println(mainLine);
                     L25.fas.println(mainLine);

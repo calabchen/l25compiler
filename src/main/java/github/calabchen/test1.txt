@@ -1,17 +1,38 @@
 program MyApp {
-    func add(a, b){
+
+    func add(a, b, c){
         let sum = a+b;
+        let res1 = sum;
         return sum;
     }
+
+    func square1(x) {
+        let result = x * x;
+        let res = result;
+        return result;
+    }
+
+    func square2(x) {
+        let result = x * x;
+        let res = square1(result);
+        return result;
+    }
+
+    func square3(x) {
+        let result = x * x;
+        let res = result;
+        return result;
+    }
+
+
     main {
         let x;
         x=1;
         let y = 2;
-        let z = add(x, y);
 
         let p;
         input(p);
-
+        let z = 1;
         if (z > 50) {
             let q1 = 1;
             output(z);

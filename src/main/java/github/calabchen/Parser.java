@@ -91,11 +91,10 @@ public class Parser {
      * 分析<主程序>
      */
     public void parseProgram(int lev, SymSet fsys) {
-        int dx0, tx0, cx0;                // 保留初始dx，tx和cx
+        int dx0;                // 保留初始dx
         SymSet nxtlev = new SymSet(symnum);
-        tx0 = table.tx;                    // 记录本层名字的初始位置（以便恢复）
-        table.get(table.tx).adr = interp.cx;
 
+        table.get(table.tx).adr = interp.cx;
         interp.gen(Fct.JMP, 0, 0);
 
         if (sym == Symbol.ident) {
@@ -106,7 +105,13 @@ public class Parser {
                 do {
                     while (sym == Symbol.funcsym) {
                         nextSym();//读进 function name
-                        parseFuncDeclaration(lev + 1, nxtlev);
+                        if (sym == Symbol.ident) {
+                            table.enter(Objekt.function, lev + 1, dx);
+                            nextSym();//读进 '{'
+                            parseFuncDeclaration(lev + 1, nxtlev);
+                        } else {
+                            Err.report(5);
+                        }
                     }
                 } while (declbegsys.get(sym));
 
@@ -122,24 +127,7 @@ public class Parser {
                             nextSym();//读进 program '}'
 
                             if (sym == Symbol.rbrace) {
-                                // 开始生成当前过程代码
-                                Table.Item item = table.get(tx0);
-                                interp.code[item.adr].a = interp.cx;
-                                item.adr = interp.cx;                    // 当前过程代码地址
-                                item.size = dx;                            // 声明部分中每增加一条声明都会给dx增加1，
-                                // 声明部分已经结束，dx就是当前过程的堆栈帧大小
-                                cx0 = interp.cx;
-                                interp.gen(Fct.INT, 0, dx);            // 生成分配内存代码
-
-                                table.debugTable(tx0);
-
-                                // 分析<语句>
-                                nxtlev = (SymSet) fsys.clone();        // 每个后跟符号集和都包含上层后跟符号集和，以便补救
-                                nxtlev.set(Symbol.semicolon);        // 语句后跟符号为分号或end
-
-                                interp.listcode(cx0);
                                 dx = dx0;                            // 恢复堆栈帧计数器
-                                table.tx = tx0;                        // 回复名字表位置
                             } else {
                                 Err.report(10);
                             }
@@ -165,53 +153,65 @@ public class Parser {
     }
 
     private void parseFuncDeclaration(int lev, SymSet fsys) {
-        int dx0, tx0, cx0;                  // 保留初始dx，tx和cx
+        int dx0, tx0, cx0;               // 保留初始dx，tx和cx
         SymSet nxtlev = new SymSet(symnum);
-        dx0 = dx;                           // 记录本层之前的数据量（以便恢复）
+
+        dx0 = dx;                        // 记录本层之前的数据量（以便恢复）
         dx = 3;
-        tx0 = table.tx;                     // 记录本层名字的初始位置（以便恢复）
+        tx0 = table.tx;                  // 记录本层名字的初始位置（以便恢复）
         table.get(table.tx).adr = interp.cx;
+
         interp.gen(Fct.JMP, 0, 0);
 
-        if (sym == Symbol.ident) {
-            table.enter(Objekt.function, lev, dx);
-            nextSym();//读进 '{'
-            if (sym == Symbol.lparen) {
-                nextSym();//读进 ParamList 或者 ')'
-                parseParamList(lev + 1, nxtlev);
-                if (sym == Symbol.rparen) {
-                    nextSym();//读进 '{'
-                    if (sym == Symbol.lbrace) {
-                        nextSym();//读进 StatementList
-                        parseStatementList(lev + 1, nxtlev);
-                        if (sym == Symbol.returnsym) {
-                            nextSym();//读进 Expression
-                            parseExpression(lev, fsys);
-                            if (sym == Symbol.semicolon) {
-                                nextSym();//读进 '}'
-                                if (sym == Symbol.rbrace) {
-                                    nextSym();//读进 next function name or main
-                                } else {
-                                    Err.report(10);
-                                }
+        if (sym == Symbol.lparen) {
+            nextSym();//读进 ParamList 或者 ')'
+            parseParamList(lev + 1, nxtlev);
+            if (sym == Symbol.rparen) {
+                nextSym();//读进 '{'
+                if (sym == Symbol.lbrace) {
+                    nextSym();//读进 StatementList
+                    parseStatementList(lev + 1, nxtlev);
+                    if (sym == Symbol.returnsym) {
+                        nextSym();//读进 Expression
+                        parseExpression(lev, fsys);
+                        if (sym == Symbol.semicolon) {
+                            nextSym();//读进 '}'
+                            if (sym == Symbol.rbrace) {
+                                nextSym();//读进 next function name or main
                             } else {
-                                Err.report(14);
+                                Err.report(10);
                             }
                         } else {
-                            Err.report(12);
+                            Err.report(40);
                         }
                     } else {
-                        Err.report(8);
+                        Err.report(12);
                     }
                 } else {
-                    Err.report(7);
+                    Err.report(8);
                 }
             } else {
-                Err.report(6);
+                Err.report(7);
             }
         } else {
-            Err.report(5);
+            Err.report(6);
         }
+
+        // 开始生成当前过程代码
+        Table.Item item = table.get(tx0);
+        interp.code[item.adr].a = interp.cx;
+        item.adr = interp.cx;                    // 当前过程代码地址
+        item.size = dx;                          // 声明部分中每增加一条声明都会给dx增加1，
+        // 声明部分已经结束，dx就是当前过程的堆栈帧大小
+        cx0 = interp.cx;
+        interp.gen(Fct.INT, 0, dx);            // 生成分配内存代码
+
+        table.debugTable(tx0);
+
+        interp.listcode(cx0);
+
+        dx = dx0;                            // 恢复堆栈帧计数器
+        table.tx = tx0;                        // 回复名字表位置
     }
 
     private void parseParamList(int lev, SymSet fsys) {
@@ -302,10 +302,10 @@ public class Parser {
             if (sym == Symbol.rparen) {
                 nextSym();//读进 ')'
             } else {
-                Err.report(15);
+                Err.report(36);
             }
         } else {
-            Err.report(6);
+            Err.report(35);
         }
     }
 
@@ -319,17 +319,17 @@ public class Parser {
                     if (sym == Symbol.ident) {
                         nextSym();
                     } else {
-                        Err.report(18);
+                        Err.report(34);
                     }
                 }
             }
             if (sym == Symbol.rparen) {
                 nextSym();//读进 ')'
             } else {
-                Err.report(15);
+                Err.report(33);
             }
         } else {
-            Err.report(6);
+            Err.report(32);
         }
     }
 
@@ -340,10 +340,10 @@ public class Parser {
             if (sym == Symbol.rparen) {
                 nextSym();//读进 ')'
             } else {
-                Err.report(15);
+                Err.report(31);
             }
         } else {
-            Err.report(6);
+            Err.report(30);
         }
     }
 
@@ -368,16 +368,16 @@ public class Parser {
                     if (sym == Symbol.rbrace) {
                         nextSym();//读进 '}'
                     } else {
-                        Err.report(12);
+                        Err.report(29);
                     }
                 } else {
-                    Err.report(4);
+                    Err.report(28);
                 }
             } else {
-                Err.report(15);
+                Err.report(27);
             }
         } else {
-            Err.report(6);
+            Err.report(26);
         }
     }
 
@@ -396,6 +396,7 @@ public class Parser {
                         nextSym();//读进 '}'
 
                         if (sym == Symbol.elsesym) {
+                            dx = 3;
                             nextSym();//读进 '{'
                             if (sym == Symbol.lbrace) {
                                 nextSym();//读进 StatementList
@@ -403,24 +404,25 @@ public class Parser {
                                 if (sym == Symbol.rbrace) {
                                     nextSym();
                                 } else {
-                                    Err.report(12);
+                                    Err.report(25);
                                 }
                             } else {
-                                Err.report(4);
+                                Err.report(24);
                             }
+
                         }
 
                     } else {
-                        Err.report(12);
+                        Err.report(23);
                     }
                 } else {
-                    Err.report(4);
+                    Err.report(22);
                 }
             } else {
-                Err.report(15);
+                Err.report(21);
             }
         } else {
-            Err.report(6);
+            Err.report(20);
         }
     }
 
@@ -462,7 +464,7 @@ public class Parser {
                     break;
             }
         } else {
-            Err.report(22);
+            Err.report(37);
         }
     }
 
@@ -562,10 +564,10 @@ public class Parser {
                         nextSym();//读进 func_call
                         parseFuncCallStatement(lev, fsys);
                     } else {
-                        Err.report(27);
+                        Err.report(19);
                     }
                 } else {
-                    Err.report(28);
+                    Err.report(18);
                 }
             } else if (sym == Symbol.number) {
                 nextSym(); //读进 number
@@ -578,10 +580,10 @@ public class Parser {
                 if (sym == Symbol.rparen) {
                     nextSym();//读进 ')'
                 } else {
-                    Err.report(15);
+                    Err.report(39);
                 }
             } else {
-                Err.report(14);
+                Err.report(38);
             }
         }
     }
