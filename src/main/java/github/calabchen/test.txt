@@ -1,4 +1,5 @@
 program MyApp {
+
     func add(a, b) {
         let sum = a + b;
         return sum;
@@ -13,7 +14,6 @@ program MyApp {
         let x = 5;
         let y = add(x, 10);
         let z = square(y);
-
         if (z > 50) {
             output(z);
         } else {

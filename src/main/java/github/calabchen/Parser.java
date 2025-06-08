@@ -1,596 +1,587 @@
 package github.calabchen;
 
-
+/**
+ * 　　语法分析器。这是PL/0分析器中最重要的部分，在语法分析的过程中穿插着语法错误检查和目标代码生成。
+ */
 public class Parser {
-    private Scanner lex;
-    private Table table;
-    private Interpreter interp;
+    private Scanner lex;                    // 对词法分析器的引用
+    private Table table;                    // 对符号表的引用
+    private Interpreter interp;                // 对目标代码生成器的引用
 
     private final int symnum = Symbol.values().length;
 
-
+    // 表示声明开始的符号集合、表示语句开始的符号集合、表示因子开始的符号集合
+    // 实际上这就是声明、语句和因子的FIRST集合
     private SymSet declbegsys, statbegsys, facbegsys;
 
-
+    /**
+     * 当前符号，由nextsym()读入
+     *
+     * @see #nextSym()
+     */
     private Symbol sym;
 
-
+    /**
+     * 当前作用域的堆栈帧大小，或者说数据大小（data size）
+     */
     private int dx = 0;
 
-
+    /**
+     * 构造并初始化语法分析器，这里包含了C语言版本中init()函数的一部分代码
+     *
+     * @param l 编译器的词法分析器
+     * @param t 编译器的符号表
+     * @param i 编译器的目标代码生成器
+     */
     public Parser(Scanner l, Table t, Interpreter i) {
         lex = l;
         table = t;
         interp = i;
 
-
+        // 设置声明开始符号集
         declbegsys = new SymSet(symnum);
-        declbegsys.set(Symbol.programsym);
-        declbegsys.set(Symbol.mainsym);
-        declbegsys.set(Symbol.letsym);
         declbegsys.set(Symbol.funcsym);
-        declbegsys.set(Symbol.returnsym);
 
-
+        // 设置语句开始符号集
         statbegsys = new SymSet(symnum);
+        statbegsys.set(Symbol.letsym);
+        statbegsys.set(Symbol.ident);// assign or func_call
         statbegsys.set(Symbol.ifsym);
-        statbegsys.set(Symbol.elsesym);
         statbegsys.set(Symbol.whilesym);
         statbegsys.set(Symbol.inputsym);
         statbegsys.set(Symbol.outputsym);
 
-
+        // 设置因子开始符号集
         facbegsys = new SymSet(symnum);
-        facbegsys.set(Symbol.ident);
+        facbegsys.set(Symbol.ident); // ident or func_call
         facbegsys.set(Symbol.number);
         facbegsys.set(Symbol.lparen);
 
     }
 
-
+    /**
+     * 启动语法分析过程，此前必须先调用一次nextsym()
+     *
+     * @see #nextSym()
+     */
     public void parse() {
         SymSet nxtlev = new SymSet(symnum);
         nxtlev.or(declbegsys);
         nxtlev.or(statbegsys);
-        nxtlev.set(Symbol.period);
-        parseBlock(0, nxtlev);
 
-        if (sym != Symbol.period)
-            Err.report(9);
+        int beginlev = 0;
+        if (sym == Symbol.programsym) {
+            nextSym(); //读进 program name
+            parseProgram(beginlev, nxtlev);
+        } else {
+            Err.report(1);
+        }
     }
 
 
+    /**
+     * 获得下一个语法符号，这里只是简单调用一下getsym()
+     */
     public void nextSym() {
         lex.getsym();
         sym = lex.sym;
     }
 
-
-    void test(SymSet s1, SymSet s2, int errcode) {
-
-        if (!s1.get(sym)) {
-            Err.report(errcode);
-
-            while (!s1.get(sym) && !s2.get(sym))
-                nextSym();
-        }
-    }
-
-
-    public void parseBlock(int lev, SymSet fsys) {
-
-
-        int dx0, tx0, cx0;
+    /**
+     * 分析<主程序>
+     */
+    public void parseProgram(int lev, SymSet fsys) {
+        int dx0, tx0, cx0;                // 保留初始dx，tx和cx
         SymSet nxtlev = new SymSet(symnum);
-
-        dx0 = dx;
-        dx = 3;
-        tx0 = table.tx;
+        tx0 = table.tx;                    // 记录本层名字的初始位置（以便恢复）
         table.get(table.tx).adr = interp.cx;
 
         interp.gen(Fct.JMP, 0, 0);
 
-        if (lev > L25.levmax)
-            Err.report(32);
-
-
-        do {
-
-            if (sym == Symbol.constsym) {
-                nextSym();
-                // the original do...while(sym == ident) is problematic, thanks to calculous
-                // do
-                parseConstDeclaration(lev);
-                while (sym == Symbol.comma) {
-                    nextSym();
-                    parseConstDeclaration(lev);
-                }
-
-                if (sym == Symbol.semicolon)
-                    nextSym();
-                else
-                    Err.report(5);
-                // } while (sym == ident);
-            }
-
-
-            if (sym == Symbol.letsym) {
-                nextSym();
-                // the original do...while(sym == ident) is problematic, thanks to calculous
-                // do {
-                parseVarDeclaration(lev);
-                while (sym == Symbol.comma) {
-                    nextSym();
-                    parseVarDeclaration(lev);
-                }
-
-                if (sym == Symbol.semicolon)
-                    nextSym();
-                else
-                    Err.report(5);
-                // } while (sym == ident);
-            }
-
-
-            while (sym == Symbol.procsym) {
-                nextSym();
-                if (sym == Symbol.ident) {
-                    table.enter(Objekt.procedure, lev, dx);
-                    nextSym();
-                } else {
-                    Err.report(4);
-                }
-
-                if (sym == Symbol.semicolon)
-                    nextSym();
-                else
-                    Err.report(5);
-
-                nxtlev = (SymSet) fsys.clone();
-                nxtlev.set(Symbol.semicolon);
-                parseBlock(lev + 1, nxtlev);
-
-                if (sym == Symbol.semicolon) {
-                    nextSym();
-                    nxtlev = (SymSet) statbegsys.clone();
-                    nxtlev.set(Symbol.ident);
-                    nxtlev.set(Symbol.procsym);
-                    test(nxtlev, fsys, 6);
-                } else {
-                    Err.report(5);
-                }
-            }
-
-            nxtlev = (SymSet) statbegsys.clone();
-            nxtlev.set(Symbol.ident);
-            test(nxtlev, declbegsys, 7);
-        } while (declbegsys.get(sym));
-
-
-        Table.Item item = table.get(tx0);
-        interp.code[item.adr].a = interp.cx;
-        item.adr = interp.cx;
-        item.size = dx;
-
-        cx0 = interp.cx;
-        interp.gen(Fct.INT, 0, dx);
-
-        table.debugTable(tx0);
-
-
-        nxtlev = (SymSet) fsys.clone();
-        nxtlev.set(Symbol.semicolon);
-        nxtlev.set(Symbol.endsym);
-        parseStatement(nxtlev, lev);
-        interp.gen(Fct.OPR, 0, 0);
-
-        nxtlev = new SymSet(symnum);
-        test(fsys, nxtlev, 8);
-
-        interp.listcode(cx0);
-
-        dx = dx0;
-        table.tx = tx0;
-    }
-
-
-    void parseConstDeclaration(int lev) {
         if (sym == Symbol.ident) {
-            nextSym();
-            if (sym == Symbol.eql || sym == Symbol.becomes) {
-                if (sym == Symbol.becomes)
-                    Err.report(1);
-                nextSym();
-                if (sym == Symbol.number) {
-                    table.enter(Objekt.constant, lev, dx);
-                    nextSym();
+            nextSym();//读进 '{'
+            if (sym == Symbol.lbrace) {
+                nextSym();//读进 声明 或者 main
+
+                do {
+                    while (sym == Symbol.funcsym) {
+                        nextSym();//读进 function name
+                        parseFuncDeclaration(lev + 1, nxtlev);
+                    }
+                } while (declbegsys.get(sym));
+
+                if (sym == Symbol.mainsym) {
+                    dx0 = dx;                        // 记录本层之前的数据量（以便恢复）
+                    dx = 3;
+                    table.enter(Objekt.mainfunc, lev + 1, dx);
+                    nextSym();//读进 '{'
+                    if (sym == Symbol.lbrace) {
+                        nextSym();//读进 StatementList
+                        parseStatementList(lev + 2, nxtlev);
+                        if (sym == Symbol.rbrace) {
+                            nextSym();//读进 program '}'
+
+                            if (sym == Symbol.rbrace) {
+                                // 开始生成当前过程代码
+                                Table.Item item = table.get(tx0);
+                                interp.code[item.adr].a = interp.cx;
+                                item.adr = interp.cx;                    // 当前过程代码地址
+                                item.size = dx;                            // 声明部分中每增加一条声明都会给dx增加1，
+                                // 声明部分已经结束，dx就是当前过程的堆栈帧大小
+                                cx0 = interp.cx;
+                                interp.gen(Fct.INT, 0, dx);            // 生成分配内存代码
+
+                                table.debugTable(tx0);
+
+                                // 分析<语句>
+                                nxtlev = (SymSet) fsys.clone();        // 每个后跟符号集和都包含上层后跟符号集和，以便补救
+                                nxtlev.set(Symbol.semicolon);        // 语句后跟符号为分号或end
+
+                                interp.listcode(cx0);
+                                dx = dx0;                            // 恢复堆栈帧计数器
+                                table.tx = tx0;                        // 回复名字表位置
+                            } else {
+                                Err.report(10);
+                            }
+                        } else {
+                            Err.report(17);
+                        }
+                    } else {
+                        Err.report(16);
+                    }
                 } else {
-                    Err.report(2);
+                    Err.report(15);
                 }
+
+
             } else {
                 Err.report(3);
             }
+
         } else {
-            Err.report(4);
+            Err.report(2);
+        }
+
+    }
+
+    private void parseFuncDeclaration(int lev, SymSet fsys) {
+        int dx0, tx0, cx0;                  // 保留初始dx，tx和cx
+        SymSet nxtlev = new SymSet(symnum);
+        dx0 = dx;                           // 记录本层之前的数据量（以便恢复）
+        dx = 3;
+        tx0 = table.tx;                     // 记录本层名字的初始位置（以便恢复）
+        table.get(table.tx).adr = interp.cx;
+        interp.gen(Fct.JMP, 0, 0);
+
+        if (sym == Symbol.ident) {
+            table.enter(Objekt.function, lev, dx);
+            nextSym();//读进 '{'
+            if (sym == Symbol.lparen) {
+                nextSym();//读进 ParamList 或者 ')'
+                parseParamList(lev + 1, nxtlev);
+                if (sym == Symbol.rparen) {
+                    nextSym();//读进 '{'
+                    if (sym == Symbol.lbrace) {
+                        nextSym();//读进 StatementList
+                        parseStatementList(lev + 1, nxtlev);
+                        if (sym == Symbol.returnsym) {
+                            nextSym();//读进 Expression
+                            parseExpression(lev, fsys);
+                            if (sym == Symbol.semicolon) {
+                                nextSym();//读进 '}'
+                                if (sym == Symbol.rbrace) {
+                                    nextSym();//读进 next function name or main
+                                } else {
+                                    Err.report(10);
+                                }
+                            } else {
+                                Err.report(14);
+                            }
+                        } else {
+                            Err.report(12);
+                        }
+                    } else {
+                        Err.report(8);
+                    }
+                } else {
+                    Err.report(7);
+                }
+            } else {
+                Err.report(6);
+            }
+        } else {
+            Err.report(5);
         }
     }
 
-
-    void parseVarDeclaration(int lev) {
+    private void parseParamList(int lev, SymSet fsys) {
         if (sym == Symbol.ident) {
-
             table.enter(Objekt.variable, lev, dx);
             dx++;
             nextSym();
-        } else {
-            Err.report(4);
-        }
-    }
-
-
-    void parseStatement(SymSet fsys, int lev) {
-        SymSet nxtlev;
-
-        switch (sym) {
-            case ident:
-                parseAssignStatement(fsys, lev);
-                break;
-            case readsym:
-                parseReadStatement(fsys, lev);
-                break;
-            case writesym:
-                parseWriteStatement(fsys, lev);
-                break;
-            case callsym:
-                parseCallStatement(fsys, lev);
-                break;
-            case ifsym:
-                parseIfStatement(fsys, lev);
-                break;
-            case beginsym:
-                parseBeginStatement(fsys, lev);
-                break;
-            case whilesym:
-                parseWhileStatement(fsys, lev);
-                break;
-            default:
-                nxtlev = new SymSet(symnum);
-                test(fsys, nxtlev, 19);
-                break;
-        }
-    }
-
-
-    private void parseWhileStatement(SymSet fsys, int lev) {
-        int cx1, cx2;
-        SymSet nxtlev;
-
-        cx1 = interp.cx;
-        nextSym();
-        nxtlev = (SymSet) fsys.clone();
-        nxtlev.set(Symbol.dosym);
-        parseCondition(nxtlev, lev);
-        cx2 = interp.cx;
-        interp.gen(Fct.JPC, 0, 0);
-        if (sym == Symbol.dosym)
-            nextSym();
-        else
-            Err.report(18);
-        parseStatement(fsys, lev);
-        interp.gen(Fct.JMP, 0, cx1);
-        interp.code[cx2].a = interp.cx;
-    }
-
-
-    private void parseBeginStatement(SymSet fsys, int lev) {
-        SymSet nxtlev;
-
-        nextSym();
-        nxtlev = (SymSet) fsys.clone();
-        nxtlev.set(Symbol.semicolon);
-        nxtlev.set(Symbol.endsym);
-        parseStatement(nxtlev, lev);
-
-        while (statbegsys.get(sym) || sym == Symbol.semicolon) {
-            if (sym == Symbol.semicolon)
-                nextSym();
-            else
-                Err.report(10);
-            parseStatement(nxtlev, lev);
-        }
-        if (sym == Symbol.endsym)
-            nextSym();
-        else
-            Err.report(17);
-    }
-
-
-    private void parseIfStatement(SymSet fsys, int lev) {
-        int cx1;
-        SymSet nxtlev;
-
-        nextSym();
-        nxtlev = (SymSet) fsys.clone();
-        nxtlev.set(Symbol.thensym);
-        nxtlev.set(Symbol.dosym);
-        parseCondition(nxtlev, lev);
-        if (sym == Symbol.thensym)
-            nextSym();
-        else
-            Err.report(16);
-        cx1 = interp.cx;
-        interp.gen(Fct.JPC, 0, 0);
-        parseStatement(fsys, lev);
-        interp.code[cx1].a = interp.cx;
-
-    }
-
-
-    private void parseCallStatement(SymSet fsys, int lev) {
-        int i;
-        nextSym();
-        if (sym == Symbol.ident) {
-            i = table.position(lex.id);
-            if (i == 0) {
-                Err.report(11);
-            } else {
-                Table.Item item = table.get(i);
-                if (item.kind == Objekt.procedure)
-                    interp.gen(Fct.CAL, lev - item.level, item.adr);
-                else
-                    Err.report(15);
-            }
-            nextSym();
-        } else {
-            Err.report(14);
-        }
-    }
-
-
-    private void parseWriteStatement(SymSet fsys, int lev) {
-        SymSet nxtlev;
-
-        nextSym();
-        if (sym == Symbol.lparen) {
-            do {
-                nextSym();
-                nxtlev = (SymSet) fsys.clone();
-                nxtlev.set(Symbol.rparen);
-                nxtlev.set(Symbol.comma);
-                parseExpression(nxtlev, lev);
-                interp.gen(Fct.OPR, 0, 14);
-            } while (sym == Symbol.comma);
-
-            if (sym == Symbol.rparen)
-                nextSym();
-            else
-                Err.report(33);
-        }
-        interp.gen(Fct.OPR, 0, 15);
-    }
-
-
-    private void parseReadStatement(SymSet fsys, int lev) {
-        int i;
-
-        nextSym();
-        if (sym == Symbol.lparen) {
-            do {
-                nextSym();
-                if (sym == Symbol.ident)
-                    i = table.position(lex.id);
-                else
-                    i = 0;
-
-                if (i == 0) {
-                    Err.report(35);
+            while (sym == Symbol.comma) {
+                nextSym();//读进 next ident
+                if (sym == Symbol.ident) {
+                    table.enter(Objekt.variable, lev, dx);
+                    dx++;
+                    nextSym();
                 } else {
-                    Table.Item item = table.get(i);
-                    if (item.kind != Objekt.variable) {
-                        Err.report(32);
-                    } else {
-                        interp.gen(Fct.OPR, 0, 16);
-                        interp.gen(Fct.STO, lev - item.level, item.adr);
-                    }
+                    Err.report(13);
                 }
-
-                nextSym();
-            } while (sym == Symbol.comma);
-        } else {
-            Err.report(34);
-        }
-
-        if (sym == Symbol.rparen) {
-            nextSym();
-        } else {
-            Err.report(33);
-            while (!fsys.get(sym))
-                nextSym();
+            }
         }
     }
 
+    private void parseStatementList(int lev, SymSet fsys) {
+        do {
+            parseStatement(lev, fsys);
+            if (sym == Symbol.semicolon) {
+                nextSym();
+            } else {
+                Err.report(14);
+            }
+        } while (statbegsys.get(sym));
+    }
 
-    private void parseAssignStatement(SymSet fsys, int lev) {
-        int i;
+    private void parseStatement(int lev, SymSet fsys) {
+        int i; // table表中的位置
         SymSet nxtlev;
 
         i = table.position(lex.id);
-        if (i > 0) {
-            Table.Item item = table.get(i);
-            if (item.kind == Objekt.variable) {
-                nextSym();
-                if (sym == Symbol.becomes)
-                    nextSym();
-                else
-                    Err.report(13);
-                nxtlev = (SymSet) fsys.clone();
-                parseExpression(nxtlev, lev);
-
-                interp.gen(Fct.STO, lev - item.level, item.adr);
-            } else {
-                Err.report(12);
-            }
-        } else {
-            Err.report(11);
-        }
-    }
-
-
-    private void parseExpression(SymSet fsys, int lev) {
-        Symbol addop;
-        SymSet nxtlev;
-
-
-        if (sym == Symbol.plus || sym == Symbol.minus) {
-            addop = sym;
-            nextSym();
-            nxtlev = (SymSet) fsys.clone();
-            nxtlev.set(Symbol.plus);
-            nxtlev.set(Symbol.minus);
-            parseTerm(nxtlev, lev);
-            if (addop == Symbol.minus)
-                interp.gen(Fct.OPR, 0, 1);
-        } else {
-            nxtlev = (SymSet) fsys.clone();
-            nxtlev.set(Symbol.plus);
-            nxtlev.set(Symbol.minus);
-            parseTerm(nxtlev, lev);
-        }
-
-
-        while (sym == Symbol.plus || sym == Symbol.minus) {
-            addop = sym;
-            nextSym();
-            nxtlev = (SymSet) fsys.clone();
-            nxtlev.set(Symbol.plus);
-            nxtlev.set(Symbol.minus);
-            parseTerm(nxtlev, lev);
-            if (addop == Symbol.plus)
-                interp.gen(Fct.OPR, 0, 2);
-            else
-                interp.gen(Fct.OPR, 0, 3);
-        }
-    }
-
-
-    private void parseTerm(SymSet fsys, int lev) {
-        Symbol mulop;
-        SymSet nxtlev;
-
-
-        nxtlev = (SymSet) fsys.clone();
-        nxtlev.set(Symbol.times);
-        nxtlev.set(Symbol.slash);
-        parseFactor(nxtlev, lev);
-
-
-        while (sym == Symbol.times || sym == Symbol.slash) {
-            mulop = sym;
-            nextSym();
-            parseFactor(nxtlev, lev);
-            if (mulop == Symbol.times)
-                interp.gen(Fct.OPR, 0, 4);
-            else
-                interp.gen(Fct.OPR, 0, 5);
-        }
-    }
-
-
-    private void parseFactor(SymSet fsys, int lev) {
-        SymSet nxtlev;
-
-        test(facbegsys, fsys, 24);
-
-        if (facbegsys.get(sym)) {
-            if (sym == Symbol.ident) {
-                int i = table.position(lex.id);
+        switch (sym) {
+            case letsym:
+                nextSym();//读进 DeclareStatement
+                parseDeclareStatement(lev, fsys);
+                break;
+            case ident:
                 if (i > 0) {
                     Table.Item item = table.get(i);
-                    switch (item.kind) {
-                        case constant:
-                            interp.gen(Fct.LIT, 0, item.val);
-                            break;
-                        case variable:
-                            interp.gen(Fct.LOD, lev - item.level, item.adr);
-                            break;
-                        case procedure:
-                            Err.report(21);
-                            break;
+                    if (item.kind == Objekt.variable) {
+                        nextSym();//读进 AssignStatement
+                        parseAssignStatement(lev, fsys);
+                    } else if (item.kind == Objekt.function) {
+                        nextSym();//读进 FuncCallStatement
+                        parseFuncCallStatement(lev, fsys);
+                    } else {
+                        Err.report(18);
                     }
                 } else {
-                    Err.report(11);
+                    Err.report(19);
                 }
-                nextSym();
-            } else if (sym == Symbol.number) {
-                int num = lex.num;
-                if (num > L25.amax) {
-                    Err.report(31);
-                    num = 0;
-                }
-                interp.gen(Fct.LIT, 0, num);
-                nextSym();
-            } else if (sym == Symbol.lparen) {
-                nextSym();
-                nxtlev = (SymSet) fsys.clone();
-                nxtlev.set(Symbol.rparen);
-                parseExpression(nxtlev, lev);
-                if (sym == Symbol.rparen)
-                    nextSym();
-                else
-                    Err.report(22);
-            } else {
-                test(fsys, facbegsys, 23);
-            }
+                break;
+            case ifsym:
+                nextSym();//读进 '('
+                parseIfStatement(lev, fsys);
+                break;
+            case whilesym:
+                nextSym();//读进 '('
+                parseWhileStatement(lev, fsys);
+                break;
+            case inputsym:
+                nextSym();//读进 '('
+                parseInputStatement(lev, fsys);
+                break;
+            case outputsym:
+                nextSym();//读进 '('
+                parseOutputStatement(lev, fsys);
+                break;
+            default:
+                nxtlev = new SymSet(symnum);
+                break;
         }
     }
 
-    private void parseCondition(SymSet fsys, int lev) {
+    private void parseOutputStatement(int lev, SymSet fsys) {
+        if (sym == Symbol.lparen) {
+            nextSym();//读进 '('
+            parseExpression(lev, fsys);
+            while (sym == Symbol.comma) {
+                nextSym();//读进 ','
+                parseExpression(lev, fsys);
+            }
+            if (sym == Symbol.rparen) {
+                nextSym();//读进 ')'
+            } else {
+                Err.report(15);
+            }
+        } else {
+            Err.report(6);
+        }
+    }
+
+    private void parseInputStatement(int lev, SymSet fsys) {
+        if (sym == Symbol.lparen) {
+            nextSym();//读进 '('
+            if (sym == Symbol.ident) {
+                nextSym();//读进 ident
+                while (sym == Symbol.comma) {
+                    nextSym();//读进 ','
+                    if (sym == Symbol.ident) {
+                        nextSym();
+                    } else {
+                        Err.report(18);
+                    }
+                }
+            }
+            if (sym == Symbol.rparen) {
+                nextSym();//读进 ')'
+            } else {
+                Err.report(15);
+            }
+        } else {
+            Err.report(6);
+        }
+    }
+
+    private void parseFuncCallStatement(int lev, SymSet fsys) {
+        if (sym == Symbol.lparen) {
+            nextSym(); //读进 '('
+            parseArgListStatement(lev, fsys);
+            if (sym == Symbol.rparen) {
+                nextSym();//读进 ')'
+            } else {
+                Err.report(15);
+            }
+        } else {
+            Err.report(6);
+        }
+    }
+
+    private void parseArgListStatement(int lev, SymSet fsys) {
+        parseExpression(lev, fsys);
+        while (sym == Symbol.comma) {
+            nextSym();//读进 ','
+            parseExpression(lev, fsys);
+        }
+    }
+
+    private void parseWhileStatement(int lev, SymSet fsys) {
+        dx = 3;
+        if (sym == Symbol.lparen) {
+            nextSym();//读进 '('
+            parseBoolExpression(lev, fsys);
+            if (sym == Symbol.rparen) {
+                nextSym();//读进 ')'
+                if (sym == Symbol.lbrace) {
+                    nextSym();//读进 '{'
+                    parseStatementList(lev + 1, fsys);
+                    if (sym == Symbol.rbrace) {
+                        nextSym();//读进 '}'
+                    } else {
+                        Err.report(12);
+                    }
+                } else {
+                    Err.report(4);
+                }
+            } else {
+                Err.report(15);
+            }
+        } else {
+            Err.report(6);
+        }
+    }
+
+    private void parseIfStatement(int lev, SymSet fsys) {
+        dx = 3;
+
+        if (sym == Symbol.lparen) {
+            nextSym();//读进 BoolExpression
+            parseBoolExpression(lev, fsys);
+            if (sym == Symbol.rparen) {
+                nextSym();//读进 '{'
+                if (sym == Symbol.lbrace) {
+                    nextSym();//读进 StatementList
+                    parseStatementList(lev + 1, fsys);
+                    if (sym == Symbol.rbrace) {
+                        nextSym();//读进 '}'
+
+                        if (sym == Symbol.elsesym) {
+                            nextSym();//读进 '{'
+                            if (sym == Symbol.lbrace) {
+                                nextSym();//读进 StatementList
+                                parseStatementList(lev + 1, fsys);
+                                if (sym == Symbol.rbrace) {
+                                    nextSym();
+                                } else {
+                                    Err.report(12);
+                                }
+                            } else {
+                                Err.report(4);
+                            }
+                        }
+
+                    } else {
+                        Err.report(12);
+                    }
+                } else {
+                    Err.report(4);
+                }
+            } else {
+                Err.report(15);
+            }
+        } else {
+            Err.report(6);
+        }
+    }
+
+    private void parseBoolExpression(int lev, SymSet fsys) {
         Symbol relop;
         SymSet nxtlev;
 
-        if (sym == Symbol.oddsym) {
+        nxtlev = (SymSet) fsys.clone();
+        nxtlev.set(Symbol.eql);
+        nxtlev.set(Symbol.neq);
+        nxtlev.set(Symbol.lss);
+        nxtlev.set(Symbol.leq);
+        nxtlev.set(Symbol.gtr);
+        nxtlev.set(Symbol.geq);
 
+        parseExpression(lev, nxtlev);
+        if (sym == Symbol.eql || sym == Symbol.neq || sym == Symbol.lss || sym == Symbol.leq || sym == Symbol.gtr || sym == Symbol.geq) {
+            relop = sym;
             nextSym();
-            parseExpression(fsys, lev);
-            interp.gen(Fct.OPR, 0, 6);
+            parseExpression(lev, fsys);
+            switch (relop) {
+                case eql:
+                    interp.gen(Fct.OPR, 0, 8);
+                    break;
+                case neq:
+                    interp.gen(Fct.OPR, 0, 9);
+                    break;
+                case lss:
+                    interp.gen(Fct.OPR, 0, 10);
+                    break;
+                case geq:
+                    interp.gen(Fct.OPR, 0, 11);
+                    break;
+                case gtr:
+                    interp.gen(Fct.OPR, 0, 12);
+                    break;
+                case leq:
+                    interp.gen(Fct.OPR, 0, 13);
+                    break;
+            }
         } else {
+            Err.report(22);
+        }
+    }
 
+    private void parseAssignStatement(int lev, SymSet fsys) {
+        if (sym == Symbol.becomes) {
+            nextSym(); //读进 '='
+            parseExpression(lev, fsys);
+        }
+    }
+
+    private void parseDeclareStatement(int lev, SymSet fsys) {
+
+        if (sym == Symbol.ident) {
+            table.enter(Objekt.variable, lev, dx);
+            dx++;
+            nextSym();//读进 var
+            if (sym == Symbol.becomes) {
+                nextSym(); //读进 '='
+                parseExpression(lev, fsys);
+            }
+        } else {
+            Err.report(13);
+        }
+    }
+
+    private void parseExpression(int lev, SymSet fsys) {
+        SymSet nxtlev;
+
+        // 分析[+|-]<项>
+        if (sym == Symbol.plus || sym == Symbol.minus) {
+            nextSym();
             nxtlev = (SymSet) fsys.clone();
-            nxtlev.set(Symbol.eql);
-            nxtlev.set(Symbol.neq);
-            nxtlev.set(Symbol.lss);
-            nxtlev.set(Symbol.leq);
-            nxtlev.set(Symbol.gtr);
-            nxtlev.set(Symbol.geq);
-            parseExpression(nxtlev, lev);
-            if (sym == Symbol.eql || sym == Symbol.neq
-                    || sym == Symbol.lss || sym == Symbol.leq
-                    || sym == Symbol.gtr || sym == Symbol.geq) {
-                relop = sym;
-                nextSym();
-                parseExpression(fsys, lev);
-                switch (relop) {
-                    case eql:
-                        interp.gen(Fct.OPR, 0, 8);
-                        break;
-                    case neq:
-                        interp.gen(Fct.OPR, 0, 9);
-                        break;
-                    case lss:
-                        interp.gen(Fct.OPR, 0, 10);
-                        break;
-                    case geq:
-                        interp.gen(Fct.OPR, 0, 11);
-                        break;
-                    case gtr:
-                        interp.gen(Fct.OPR, 0, 12);
-                        break;
-                    case leq:
-                        interp.gen(Fct.OPR, 0, 13);
-                        break;
+            nxtlev.set(Symbol.plus);
+            nxtlev.set(Symbol.minus);
+            parseTerm(lev, nxtlev);
+        } else {
+            nxtlev = (SymSet) fsys.clone();
+            nxtlev.set(Symbol.plus);
+            nxtlev.set(Symbol.minus);
+            parseTerm(lev, nxtlev);
+        }
+
+        // 分析{<加法运算符><项>}
+        while (sym == Symbol.plus || sym == Symbol.minus) {
+            nextSym();
+            nxtlev = (SymSet) fsys.clone();
+            nxtlev.set(Symbol.plus);
+            nxtlev.set(Symbol.minus);
+            parseTerm(lev, nxtlev);
+        }
+    }
+
+    /**
+     * 分析<项>
+     *
+     * @param fsys 后跟符号集
+     * @param lev  当前层次
+     */
+    private void parseTerm(int lev, SymSet fsys) {
+        Symbol mulop;
+        SymSet nxtlev;
+
+        // 分析<因子>
+        nxtlev = (SymSet) fsys.clone();
+        nxtlev.set(Symbol.times);
+        nxtlev.set(Symbol.slash);
+        parseFactor(lev, nxtlev);
+
+        // 分析{<乘法运算符><因子>}
+        while (sym == Symbol.times || sym == Symbol.slash) {
+            mulop = sym;
+            nextSym();
+            parseFactor(lev, nxtlev);
+            if (mulop == Symbol.times) interp.gen(Fct.OPR, 0, 4);
+            else interp.gen(Fct.OPR, 0, 5);
+        }
+    }
+
+    /**
+     * 分析<因子>
+     *
+     * @param fsys 后跟符号集
+     * @param lev  当前层次
+     */
+    private void parseFactor(int lev, SymSet fsys) {
+        int i;
+        SymSet nxtlev;
+        i = table.position(lex.id);
+
+        if (facbegsys.get(sym)) {
+            if (sym == Symbol.ident) {
+                if (i > 0) {
+                    Table.Item item = table.get(i);
+                    if (item.kind == Objekt.variable) {
+                        nextSym();//读进 var
+                    } else if (item.kind == Objekt.function) {
+                        nextSym();//读进 func_call
+                        parseFuncCallStatement(lev, fsys);
+                    } else {
+                        Err.report(27);
+                    }
+                } else {
+                    Err.report(28);
+                }
+            } else if (sym == Symbol.number) {
+                nextSym(); //读进 number
+            } else if (sym == Symbol.lparen) {
+                nextSym(); //读进 '('
+                nxtlev = (SymSet) fsys.clone();
+                nxtlev.set(Symbol.rparen);
+                parseExpression(lev, nxtlev);
+
+                if (sym == Symbol.rparen) {
+                    nextSym();//读进 ')'
+                } else {
+                    Err.report(15);
                 }
             } else {
-                Err.report(20);
+                Err.report(14);
             }
         }
     }

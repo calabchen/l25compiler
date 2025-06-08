@@ -1,0 +1,27 @@
+program MyApp {
+    func add(a, b){
+        let sum = a+b;
+        return sum;
+    }
+    main {
+        let x;
+        x=1;
+        let y = 2;
+        let z = add(x, y);
+
+        let p;
+        input(p);
+
+        if (z > 50) {
+            let q1 = 1;
+            output(z);
+        }else{
+            let q2 = 1;
+            output(0);
+        };
+
+        while(y <= 3){
+            let w = y + 1;
+        };
+    }
+}
