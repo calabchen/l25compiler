@@ -127,6 +127,7 @@ public class L25 {
             if (l25.compile()) {
                 // 如果成功编译则接着解释运行
                 L25.fa2 = new PrintStream(Paths.get(testDir, "fa2.tmp").toString());
+//                interp.listcode(0);
                 interp.interpret();
                 L25.fa2.close();
             } else {

@@ -4,7 +4,7 @@ package github.calabchen;
  * 类P-Code指令类型
  */
 enum Fct {
-    LIT, OPR, LOD, STO, CAL, INT, JMP, JPC
+    LIT, OPR, LOD, STO, CAL, INT, JMP, JPC, RET
 }
 
 /**
@@ -61,6 +61,7 @@ public class Interpreter {
         code[cx].l = y;
         code[cx].a = z;
         cx++;
+//        System.out.println("cx= " + cx);
     }
 
     /**
@@ -83,8 +84,8 @@ public class Interpreter {
      */
     public void interpret() {
         int p, b, t;                        // 指令指针，指令基址，栈顶指针
-        Instruction i;                            // 存放当前指令
-        int[] s = new int[stacksize];        // 栈
+        Instruction i;                      // 存放当前指令
+        int[] s = new int[stacksize];       // 栈
 
         System.out.println("start L25");
         t = b = p = 0;
@@ -93,7 +94,7 @@ public class Interpreter {
             i = code[p];                    // 读当前指令
             p++;
             switch (i.f) {
-                case LIT:                // 将a的值取到栈顶
+                case LIT:                // 将常量a的值取到栈顶
                     s[t] = i.a;
                     t++;
                     break;
@@ -104,62 +105,62 @@ public class Interpreter {
                             p = s[t + 2];
                             b = s[t + 1];
                             break;
-                        case 1:
+                        case 1:         // 栈顶元素取反
                             s[t - 1] = -s[t - 1];
                             break;
-                        case 2:
+                        case 2:         // 次栈顶项加上栈顶项，退两个栈元素，相加值进栈
                             t--;
                             s[t - 1] = s[t - 1] + s[t];
                             break;
                         case 3:
-                            t--;
+                            t--;        // 次栈顶项减去栈顶项，退两个栈元素，相减值进栈
                             s[t - 1] = s[t - 1] - s[t];
                             break;
-                        case 4:
+                        case 4:         // 次栈顶项乘以栈顶项
                             t--;
                             s[t - 1] = s[t - 1] * s[t];
                             break;
-                        case 5:
+                        case 5:         // 次栈顶项除以栈顶项
                             t--;
                             s[t - 1] = s[t - 1] / s[t];
                             break;
-                        case 6:
+                        case 6:         // 次栈顶项取余栈顶项
                             s[t - 1] = s[t - 1] % 2;
                             break;
-                        case 8:
+                        case 8:         // 次栈顶项与栈顶项是否相等
                             t--;
                             s[t - 1] = (s[t - 1] == s[t] ? 1 : 0);
                             break;
-                        case 9:
+                        case 9:         // 次栈顶项与栈顶项是否不等
                             t--;
                             s[t - 1] = (s[t - 1] != s[t] ? 1 : 0);
                             break;
-                        case 10:
+                        case 10:        // 次栈顶项是否小于栈顶项
                             t--;
                             s[t - 1] = (s[t - 1] < s[t] ? 1 : 0);
                             break;
-                        case 11:
+                        case 11:        // 次栈顶项是否大于等于栈顶项
                             t--;
                             s[t - 1] = (s[t - 1] >= s[t] ? 1 : 0);
                             break;
-                        case 12:
+                        case 12:        // 次栈顶项是否大于栈顶项
                             t--;
                             s[t - 1] = (s[t - 1] > s[t] ? 1 : 0);
                             break;
-                        case 13:
+                        case 13:         // 次栈顶项是否小于等于栈顶项
                             t--;
                             s[t - 1] = (s[t - 1] <= s[t] ? 1 : 0);
                             break;
-                        case 14:
+                        case 14:         // 栈顶值输出
                             System.out.print(s[t - 1]);
                             L25.fa2.print(s[t - 1]);
                             t--;
                             break;
-                        case 15:
+                        case 15:        // 输出换行符
                             System.out.println();
                             L25.fa2.println();
                             break;
-                        case 16:
+                        case 16:        // 读入一个输入置于栈顶
                             System.out.print("?");
                             L25.fa2.print("?");
                             s[t] = 0;
@@ -198,8 +199,23 @@ public class Interpreter {
                     if (s[t] == 0)
                         p = i.a;
                     break;
+                case RET:               // 函数调用结束后返回
+                    if (i.a == 1) {
+                        t = b - 1;
+                        b = s[t + 1];
+                        if (s[t + 2] == 0) { // 主函数
+                            p = 0;
+                        }
+                    } else { // 函数
+                        int tmp = t;
+                        t = b;
+                        p = s[t + 1];
+                        b = s[t];
+                        s[t] = s[tmp];
+                    }
             }
         } while (p != 0);
+        System.out.println("End l25");
     }
 
     /**

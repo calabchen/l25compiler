@@ -69,7 +69,6 @@ public class Parser {
         nxtlev.or(statbegsys);
 
         parseProgram(0, nxtlev);
-        interp.listcode(0);
     }
 
 
@@ -98,9 +97,6 @@ public class Parser {
                 if (sym == Symbol.lbrace) {
                     nextSym();//读进 声明 或者 main
 
-                    interp.gen(Fct.JMP, 0, 0);
-//                    interp.listcode(0);
-
                     do {
                         while (sym == Symbol.funcsym) {
                             nextSym();//读进 function name
@@ -119,12 +115,9 @@ public class Parser {
 
                         dx0 = dx;                        // 记录本层之前的数据量（以便恢复）
                         dx = 3;
-                        tx0 = table.tx;                  // 记录本层名3字的初始位置（以便恢复）
+                        tx0 = table.tx;                  // 记录本层名字的初始位置（以便恢复）
                         table.get(table.tx).adr = interp.cx;
-
-                        cx0 = interp.cx;
-                        interp.code[0].a = cx0;
-                        interp.gen(Fct.INT, 0, 3);            // 生成分配内存代码
+                        interp.gen(Fct.JMP, 0, 0);
 
                         nextSym();//读进 '{'
                         if (sym == Symbol.lbrace) {
@@ -141,17 +134,17 @@ public class Parser {
                             Err.report(16);
                         }
 
-//                        // 开始生成当前过程代码
+                        // 开始生成当前过程代码
                         Table.Item item = table.get(tx0);
-//                        interp.code[item.adr].a = interp.cx;
-                        item.adr = cx0;                    // 当前过程代码地址
+                        interp.code[item.adr].a = interp.cx;
+                        item.adr = interp.cx;                    // 当前过程代码地址
                         item.size = dx;                          // 声明部分中每增加一条声明都会给dx增加1，
-                        interp.code[cx0].a = dx;
                         // 声明部分已经结束，dx就是当前过程的堆栈帧大小
-
+                        cx0 = interp.cx;
+                        interp.gen(Fct.INT, 0, dx);            // 生成分配内存代码
 
                         table.debugTable(tx0);
-//                        interp.listcode(cx0);
+                        interp.listcode(cx0);
 
                         dx = dx0;                            // 恢复堆栈帧计数器
                         table.tx = tx0;                        // 回复名字表位置
@@ -189,12 +182,9 @@ public class Parser {
         dx = 3;
         tx0 = table.tx;                  // 记录本层名字的初始位置（以便恢复）
         table.get(table.tx).adr = interp.cx;
-//        interp.gen(Fct.JMP, 0, 0);
+        interp.gen(Fct.JMP, 0, 0);
 
         if (sym == Symbol.lparen) {
-            cx0 = interp.cx;
-            interp.gen(Fct.INT, 0, 3);            // 生成分配内存代码
-
             nextSym();//读进 ParamList 或者 ')'
             parseParamList(lev + 1, nxtlev);
             if (sym == Symbol.rparen) {
@@ -213,17 +203,17 @@ public class Parser {
 
                                 // 开始生成当前过程代码
                                 Table.Item item = table.get(tx0);
-//                                interp.code[item.adr].a = interp.cx;
-                                item.adr = cx0;                    // 当前过程代码地址
+                                interp.code[item.adr].a = interp.cx;
+                                item.adr = interp.cx;                    // 当前过程代码地址
                                 item.size = dx;                          // 声明部分中每增加一条声明都会给dx增加1，
-                                interp.code[cx0].a = dx;
                                 // 声明部分已经结束，dx就是当前过程的堆栈帧大小
-
+                                cx0 = interp.cx;
+                                interp.gen(Fct.INT, 0, dx);            // 生成分配内存代码
                                 table.debugTable(tx0);
 
                                 dx = dx0;                            // 恢复堆栈帧计数器
                                 table.tx = tx0;                        // 回复名字表位置
-//                                interp.listcode(cx0);
+                                interp.listcode(cx0);
 
                                 nextSym();//读进 next function name or main
                             } else {

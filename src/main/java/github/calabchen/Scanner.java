@@ -4,7 +4,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 
 /**
- * 　　词法分析器负责的工作是从源代码里面读取文法符号，这是PL/0编译器的主要组成部分之一。
+ * 　　词法分析器负责的工作是从源代码里面读取文法符号，这是L25编译器的主要组成部分之一。
  */
 public class Scanner {
     /**

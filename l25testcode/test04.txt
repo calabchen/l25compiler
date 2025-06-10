@@ -1,0 +1,14 @@
+program MyApp {
+
+    func add(a, b, c){
+        let sum = a+b;
+        let res1 = sum;
+        return sum;
+    }
+
+
+    main {
+        let x;
+        x=1;
+    }
+}

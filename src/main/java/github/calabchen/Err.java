@@ -60,6 +60,7 @@ public class Err {
         errorMessages.put(38, "missing factor '(' before expression !");
         errorMessages.put(39, "missing factor ')' after expression !");
         errorMessages.put(40, "missing ';' after return !");
+        errorMessages.put(41, "number is too large !");
     }
 
     /**

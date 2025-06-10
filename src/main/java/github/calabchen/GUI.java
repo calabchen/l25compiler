@@ -6,6 +6,8 @@ import java.awt.*;
 import java.io.*;
 import java.nio.file.Paths;
 
+import static github.calabchen.L25.interp;
+
 /**
  * @author calabchen
  * @since 2025/6/9
@@ -137,6 +139,8 @@ public class GUI extends JFrame {
                 L25.tableswitch = listSymbolTableCheckBox.isSelected();
 
                 boolean success = l25.compile();
+//                interp.listcode(0);
+
                 if (success) {
                     outputWindow.append("Compilation successful.\n");
                 } else {
@@ -151,8 +155,9 @@ public class GUI extends JFrame {
         runButton.addActionListener(e -> {
             try {
                 L25.fa2 = new PrintStream(Paths.get(L25.testDir, "fa2.tmp").toString());
-                if (L25.interp != null) {
-                    L25.interp.interpret();
+                if (interp != null) {
+
+                    interp.interpret();
                     L25.fa2.close();
                     outputWindow.append("Program executed.\n");
                 } else {
@@ -221,4 +226,5 @@ public class GUI extends JFrame {
     public static void main(String[] args) {
         SwingUtilities.invokeLater(GUI::new);
     }
+
 }
