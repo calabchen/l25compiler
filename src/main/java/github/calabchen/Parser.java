@@ -91,12 +91,6 @@ public class Parser {
      * 分析<主程序>
      */
     public void parseProgram(int lev, SymSet fsys) {
-        int dx0;                // 保留初始dx
-        SymSet nxtlev = new SymSet(symnum);
-
-        table.get(table.tx).adr = interp.cx;
-        interp.gen(Fct.JMP, 0, 0);
-
         if (sym == Symbol.ident) {
             nextSym();//读进 '{'
             if (sym == Symbol.lbrace) {
@@ -108,7 +102,7 @@ public class Parser {
                         if (sym == Symbol.ident) {
                             table.enter(Objekt.function, lev + 1, dx);
                             nextSym();//读进 '{'
-                            parseFuncDeclaration(lev + 1, nxtlev);
+                            parseFuncDeclaration(lev + 1, fsys);
                         } else {
                             Err.report(5);
                         }
@@ -116,18 +110,40 @@ public class Parser {
                 } while (declbegsys.get(sym));
 
                 if (sym == Symbol.mainsym) {
+                    int dx0, tx0, cx0;               // 保留初始dx，tx和cx
+
                     dx0 = dx;                        // 记录本层之前的数据量（以便恢复）
                     dx = 3;
+
                     table.enter(Objekt.mainfunc, lev + 1, dx);
+
+                    tx0 = table.tx;                  // 记录本层名字的初始位置（以便恢复）
+                    table.get(table.tx).adr = interp.cx;
+                    interp.gen(Fct.JMP, 0, 0);
+
                     nextSym();//读进 '{'
                     if (sym == Symbol.lbrace) {
                         nextSym();//读进 StatementList
-                        parseStatementList(lev + 2, nxtlev);
+                        parseStatementList(lev + 2, fsys);
                         if (sym == Symbol.rbrace) {
                             nextSym();//读进 program '}'
 
                             if (sym == Symbol.rbrace) {
+                                // 开始生成当前过程代码
+                                Table.Item item = table.get(tx0);
+                                interp.code[item.adr].a = interp.cx;
+                                item.adr = interp.cx;                    // 当前过程代码地址
+                                item.size = dx;                          // 声明部分中每增加一条声明都会给dx增加1，
+                                // 声明部分已经结束，dx就是当前过程的堆栈帧大小
+                                cx0 = interp.cx;
+                                interp.gen(Fct.INT, 0, dx);            // 生成分配内存代码
+
+                                table.debugTable(tx0);
+
+                                interp.listcode(cx0);
+
                                 dx = dx0;                            // 恢复堆栈帧计数器
+                                table.tx = tx0;                        // 回复名字表位置
                             } else {
                                 Err.report(10);
                             }
@@ -137,6 +153,7 @@ public class Parser {
                     } else {
                         Err.report(16);
                     }
+
                 } else {
                     Err.report(15);
                 }
@@ -160,7 +177,6 @@ public class Parser {
         dx = 3;
         tx0 = table.tx;                  // 记录本层名字的初始位置（以便恢复）
         table.get(table.tx).adr = interp.cx;
-
         interp.gen(Fct.JMP, 0, 0);
 
         if (sym == Symbol.lparen) {
@@ -173,7 +189,7 @@ public class Parser {
                     parseStatementList(lev + 1, nxtlev);
                     if (sym == Symbol.returnsym) {
                         nextSym();//读进 Expression
-                        parseExpression(lev, fsys);
+                        parseExpression(lev, nxtlev);
                         if (sym == Symbol.semicolon) {
                             nextSym();//读进 '}'
                             if (sym == Symbol.rbrace) {
@@ -356,20 +372,27 @@ public class Parser {
     }
 
     private void parseWhileStatement(int lev, SymSet fsys) {
-        dx = 3;
+        int dx0;               // 保留初始dx，tx和cx
+
         if (sym == Symbol.lparen) {
             nextSym();//读进 '('
             parseBoolExpression(lev, fsys);
             if (sym == Symbol.rparen) {
                 nextSym();//读进 ')'
+
+                dx0 = dx;                        // 记录本层之前的数据量（以便恢复）
+                dx = 3;
                 if (sym == Symbol.lbrace) {
                     nextSym();//读进 '{'
                     parseStatementList(lev + 1, fsys);
+
                     if (sym == Symbol.rbrace) {
                         nextSym();//读进 '}'
                     } else {
                         Err.report(29);
                     }
+
+                    dx = dx0;                            // 恢复堆栈帧计数器
                 } else {
                     Err.report(28);
                 }
@@ -382,13 +405,16 @@ public class Parser {
     }
 
     private void parseIfStatement(int lev, SymSet fsys) {
-        dx = 3;
+        int dx0;               // 保留初始dx，tx和cx
 
         if (sym == Symbol.lparen) {
             nextSym();//读进 BoolExpression
             parseBoolExpression(lev, fsys);
             if (sym == Symbol.rparen) {
                 nextSym();//读进 '{'
+
+                dx0 = dx;                        // 记录本层之前的数据量（以便恢复）
+                dx = 3;
                 if (sym == Symbol.lbrace) {
                     nextSym();//读进 StatementList
                     parseStatementList(lev + 1, fsys);
@@ -396,8 +422,10 @@ public class Parser {
                         nextSym();//读进 '}'
 
                         if (sym == Symbol.elsesym) {
-                            dx = 3;
                             nextSym();//读进 '{'
+
+                            dx0 = dx;                        // 记录本层之前的数据量（以便恢复）
+                            dx = 3;
                             if (sym == Symbol.lbrace) {
                                 nextSym();//读进 StatementList
                                 parseStatementList(lev + 1, fsys);
@@ -410,11 +438,13 @@ public class Parser {
                                 Err.report(24);
                             }
 
+                            dx = dx0;                            // 恢复堆栈帧计数器
                         }
-
                     } else {
                         Err.report(23);
                     }
+
+                    dx = dx0;                            // 恢复堆栈帧计数器
                 } else {
                     Err.report(22);
                 }
@@ -480,6 +510,7 @@ public class Parser {
         if (sym == Symbol.ident) {
             table.enter(Objekt.variable, lev, dx);
             dx++;
+
             nextSym();//读进 var
             if (sym == Symbol.becomes) {
                 nextSym(); //读进 '='

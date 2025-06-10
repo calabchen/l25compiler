@@ -13,7 +13,7 @@ enum Objekt {
 public class Table {
     public static class Item {
         String name;        // 名字
-        Objekt kind;        // 类型: const, var, array, struct or function
+        Objekt kind;        // 类型:  var or function
         int level;          // 所处层
         int adr;            // 地址
         int size;           // 需要分配的数据区空间
