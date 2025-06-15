@@ -4,7 +4,7 @@ package github.calabchen;
  * 类P-Code指令类型
  */
 enum Fct {
-    LIT, OPR, LOD, STO, CAL, INT, JMP, JPC, RET
+    LIT, OPR, LOD, STO, CAL, INT, JMP, JPC, RET, HLT
 }
 
 /**
@@ -25,6 +25,20 @@ class Instruction {
      * 指令参数
      */
     public int a;
+
+    public Instruction() {
+    }
+
+    public Instruction(Fct f, int l, int a) {
+        this.f = f;
+        this.l = l;
+        this.a = a;
+    }
+
+    @Override
+    public String toString() {
+        return f + " " + l + " " + a;
+    }
 }
 
 /**
@@ -33,6 +47,8 @@ class Instruction {
 public class Interpreter {
     // 解释执行时使用的栈大小
     final int stacksize = 500;
+
+    final int STACK_MAX = 999;
 
     /**
      * 虚拟机代码指针，取值范围[0, cxmax-1]
@@ -88,72 +104,81 @@ public class Interpreter {
         int[] s = new int[stacksize];       // 栈
 
         System.out.println("start L25");
-        t = b = p = 0;
-        s[0] = s[1] = s[2] = 0;
+//        t = b = p = 0;
+        p = 0;
+        b = 1;
+        t = 0;
+        s[0] = 0; // s[0]不用
+        // main program's three link units set to 0
+        s[1] = s[2] = s[3] = 0;
         do {
             i = code[p];                    // 读当前指令
             p++;
             switch (i.f) {
                 case LIT:                // 将常量a的值取到栈顶
-                    s[t] = i.a;
+                    if (t + 1 > STACK_MAX) throw new RuntimeException("Stack overflow");
                     t++;
+                    s[t] = i.a;
                     break;
                 case OPR:                // 数学、逻辑运算
                     switch (i.a) {
-                        case 0:
-                            t = b;
-                            p = s[t + 2];
-                            b = s[t + 1];
-                            break;
+//                        case 0:
+//                            t = b;
+//                            p = s[t + 2];
+//                            b = s[t + 1];
+//                            break;
                         case 1:         // 栈顶元素取反
                             s[t - 1] = -s[t - 1];
                             break;
                         case 2:         // 次栈顶项加上栈顶项，退两个栈元素，相加值进栈
                             t--;
-                            s[t - 1] = s[t - 1] + s[t];
+                            s[t] = s[t] + s[t + 1];
                             break;
                         case 3:
                             t--;        // 次栈顶项减去栈顶项，退两个栈元素，相减值进栈
-                            s[t - 1] = s[t - 1] - s[t];
+                            s[t] = s[t] - s[t + 1];
                             break;
                         case 4:         // 次栈顶项乘以栈顶项
                             t--;
-                            s[t - 1] = s[t - 1] * s[t];
+                            s[t] = s[t] * s[t + 1];
                             break;
                         case 5:         // 次栈顶项除以栈顶项
                             t--;
-                            s[t - 1] = s[t - 1] / s[t];
+                            if (s[t + 1] == 0) {
+                                throw new RuntimeException("Division by zero");
+                            }
+                            s[t] = s[t] / s[t + 1];
                             break;
                         case 6:         // 次栈顶项取余栈顶项
-                            s[t - 1] = s[t - 1] % 2;
+                            s[t] = s[t] % 2;
                             break;
                         case 8:         // 次栈顶项与栈顶项是否相等
                             t--;
-                            s[t - 1] = (s[t - 1] == s[t] ? 1 : 0);
+                            s[t] = (s[t] == s[t + 1] ? 1 : 0);
                             break;
                         case 9:         // 次栈顶项与栈顶项是否不等
                             t--;
-                            s[t - 1] = (s[t - 1] != s[t] ? 1 : 0);
+                            s[t] = (s[t] != s[t + 1] ? 1 : 0);
                             break;
                         case 10:        // 次栈顶项是否小于栈顶项
                             t--;
-                            s[t - 1] = (s[t - 1] < s[t] ? 1 : 0);
+                            s[t] = (s[t] < s[t + 1] ? 1 : 0);
                             break;
                         case 11:        // 次栈顶项是否大于等于栈顶项
                             t--;
-                            s[t - 1] = (s[t - 1] >= s[t] ? 1 : 0);
+                            s[t] = (s[t] >= s[t + 1] ? 1 : 0);
                             break;
                         case 12:        // 次栈顶项是否大于栈顶项
                             t--;
-                            s[t - 1] = (s[t - 1] > s[t] ? 1 : 0);
+                            s[t] = (s[t] > s[t + 1] ? 1 : 0);
                             break;
                         case 13:         // 次栈顶项是否小于等于栈顶项
                             t--;
-                            s[t - 1] = (s[t - 1] <= s[t] ? 1 : 0);
+                            s[t] = (s[t] <= s[t + 1] ? 1 : 0);
                             break;
                         case 14:         // 栈顶值输出
-                            System.out.print(s[t - 1]);
-                            L25.fa2.print(s[t - 1]);
+                            System.out.print(s[t]);
+                            L25.fa2.print(s[t]);
                             t--;
                             break;
                         case 15:        // 输出换行符
@@ -161,61 +186,72 @@ public class Interpreter {
                             L25.fa2.println();
                             break;
                         case 16:        // 读入一个输入置于栈顶
-                            System.out.print("?");
-                            L25.fa2.print("?");
-                            s[t] = 0;
+                            if (t + 1 > STACK_MAX) throw new RuntimeException("Stack overflow");
+                            System.out.print("input?");
+                            L25.fa2.print("input?");
+                            int inputValue;
                             try {
-                                s[t] = Integer.parseInt(L25.stdin.readLine());
+                                inputValue = Integer.parseInt(L25.stdin.readLine());
                             } catch (Exception e) {
+                                System.out.println("Invalid number");
+                                inputValue = 0;
                             }
-                            L25.fa2.println(s[t]);
-                            t++;
+                            L25.fa2.println(inputValue);
+                            s[++t] = inputValue;  // 输入值压栈
                             break;
                     }
                     break;
                 case LOD:                // 取相对当前过程的数据基地址为a的内存的值到栈顶
-                    s[t] = s[base(i.l, s, b) + i.a];
                     t++;
+                    s[t] = s[base(i.l, s, b) + i.a];
                     break;
                 case STO:                // 栈顶的值存到相对当前过程的数据基地址为a的内存
-                    t--;
                     s[base(i.l, s, b) + i.a] = s[t];
+                    t--;
                     break;
-                case CAL:                // 调用子过程
-                    s[t] = base(i.l, s, b);    // 将静态作用域基地址入栈
-                    s[t + 1] = b;                    // 将动态作用域基地址入栈
-                    s[t + 2] = p;                    // 将当前指令指针入栈
-                    b = t;                    // 改变基地址指针值为新过程的基地址
-                    p = i.a;                    // 跳转
+                case CAL:// 调用子过程
+                    for (int j = i.l; j > 0; j--) {
+                        s[t - i.l + 3 + j] = s[t - i.l + j];
+                    }
+                    t = t - i.l;
+                    s[t + 1] = b;
+                    s[t + 2] = b;
+                    s[t + 3] = p;
+                    b = t + 1;
+                    p = i.a;
                     break;
                 case INT:            // 分配内存
+                    if (i.a > 0 && t + i.a > STACK_MAX) throw new RuntimeException("Stack overflow");
                     t += i.a;
                     break;
                 case JMP:                // 直接跳转
                     p = i.a;
                     break;
                 case JPC:                // 条件跳转（当栈顶为0的时候跳转）
-                    t--;
                     if (s[t] == 0)
                         p = i.a;
+                    t--;
                     break;
                 case RET:               // 函数调用结束后返回
-                    if (i.a == 1) {
+                    if (i.a == 1) {  // 主函数返回
                         t = b - 1;
-                        b = s[t + 1];
-                        if (s[t + 2] == 0) { // 主函数
-                            p = 0;
-                        }
-                    } else { // 函数
-                        int tmp = t;
-                        t = b;
-                        p = s[t + 1];
-                        b = s[t];
-                        s[t] = s[tmp];
+                        b = s[t + 2];
+                    } else {  // 普通函数返回
+                        int returnValue = s[t]; // 保存返回值
+                        // 恢复调用者环境
+                        int newBase = s[b + 1]; // 动态链（调用者基址）
+                        int returnAddress = s[b + 2]; // 返回地址
+                        // 计算调用者栈顶位置（调用前栈顶 + 返回值）
+                        t = b ;
+                        s[t] = returnValue; // 将返回值放到调用者栈顶
+                        b = newBase; // 恢复调用者基址
+                        p = returnAddress; // 设置返回地址
                     }
+                    break;
+                case HLT:
+                    return;
             }
         } while (p != 0);
-        System.out.println("End l25");
     }
 
     /**
@@ -234,4 +270,13 @@ public class Interpreter {
         }
         return b1;
     }
+
+    public void setCode(int addr, Fct f, int l, int a) {
+        if (addr >= 0 && addr < code.length) {
+            code[addr] = new Instruction(f, l, a);
+        } else {
+            System.err.println("Error: setCode address out of bounds: " + addr);
+        }
+    }
+
 }

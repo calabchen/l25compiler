@@ -61,6 +61,18 @@ public class Err {
         errorMessages.put(39, "missing factor ')' after expression !");
         errorMessages.put(40, "missing ';' after return !");
         errorMessages.put(41, "number is too large !");
+        errorMessages.put(42, "missing array '[' !");
+        errorMessages.put(43, "missing array ']' !");
+        errorMessages.put(44, "missing array element '[' !");
+        errorMessages.put(45, "missing array element '[' !");
+        errorMessages.put(46, "missing struct name !");
+        errorMessages.put(47, "missing struct '{' !");
+        errorMessages.put(48, "missing struct '}' !");
+        errorMessages.put(49, "missing struct name !");
+        errorMessages.put(50, "missing struct name !");
+        errorMessages.put(51, "missing array length !");
+        errorMessages.put(52, "Exceeded the maximum allowed level of nested declarations !");
+        errorMessages.put(53, "unkown statement !");
     }
 
     /**

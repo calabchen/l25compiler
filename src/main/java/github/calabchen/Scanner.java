@@ -85,7 +85,7 @@ public class Scanner {
         ssym[':'] = Symbol.colon;
 
         // 设置保留字名字,按照字母顺序，便于折半查找
-        word = new String[]{"else", "func", "if", "input", "let", "main", "output", "program", "return", "while"};
+        word = new String[]{"else", "func", "if", "input", "let", "main", "output", "program", "return", "struct","while"};
         // 设置保留字符号
         wsym = new Symbol[L25.norw];
         wsym[0] = Symbol.elsesym;
@@ -97,7 +97,8 @@ public class Scanner {
         wsym[6] = Symbol.outputsym;
         wsym[7] = Symbol.programsym;
         wsym[8] = Symbol.returnsym;
-        wsym[9] = Symbol.whilesym;
+        wsym[9] = Symbol.structsym;
+        wsym[10] = Symbol.whilesym;
     }
 
     /**

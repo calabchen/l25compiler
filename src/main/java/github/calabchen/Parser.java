@@ -41,6 +41,7 @@ public class Parser {
         // 设置声明开始符号集
         declbegsys = new SymSet(symnum);
         declbegsys.set(Symbol.funcsym);
+        declbegsys.set(Symbol.structsym);
 
         // 设置语句开始符号集
         statbegsys = new SymSet(symnum);
@@ -56,6 +57,7 @@ public class Parser {
         facbegsys.set(Symbol.ident); // ident or func_call
         facbegsys.set(Symbol.number);
         facbegsys.set(Symbol.lparen);
+        facbegsys.set(Symbol.minus);
     }
 
     /**
@@ -68,7 +70,28 @@ public class Parser {
         nxtlev.or(declbegsys);
         nxtlev.or(statbegsys);
 
-        parseProgram(0, nxtlev);
+        if (sym == Symbol.programsym) {
+            nextSym(); //读进 program name
+            if (sym == Symbol.ident) {
+                nextSym();//读进 '{'
+                if (sym == Symbol.lbrace) {
+                    nextSym();//读进 声明 或者 main
+                    parseProgram(0, nxtlev);
+                    if (sym == Symbol.rbrace) {
+                        System.out.println("Program parsed successfully!");
+                    } else {
+                        Err.report(4);
+                    }
+                } else {
+                    Err.report(3);
+                }
+            } else {
+                Err.report(2);
+            }
+        } else {
+            Err.report(1);
+        }
+
         interp.listcode(0);
     }
 
@@ -88,174 +111,215 @@ public class Parser {
      * fsys:   当前模块后继符号集合
      */
     public void parseProgram(int lev, SymSet fsys) {
-        int dx0, tx0, cx0;               // 保留初始dx，tx和cx
-        SymSet nxtlev = new SymSet(symnum);
+        dx = 3;                 // 初始化为3（静态链、动态链、返回地址）
+        int jmpToMainAddr = interp.cx;
+        interp.gen(Fct.JMP, 0, 0);  // 稍后回填跳转到 main 的入口
 
-        if (sym == Symbol.programsym) {
-            nextSym(); //读进 program name
+        if (lev > L25.levmax) {
+            Err.report(52);
+        }
+
+        while (sym == Symbol.structsym) {
+            nextSym();//读进 struct name
             if (sym == Symbol.ident) {
+                table.enter(Objekt.struct, lev + 1, dx);
                 nextSym();//读进 '{'
-                if (sym == Symbol.lbrace) {
-                    nextSym();//读进 声明 或者 main
+                parseStructDeclaration(lev + 1, fsys);
+            } else {
+                Err.report(46);
+            }
+        }
 
-                    interp.gen(Fct.JMP, 0, 0);
-//                    interp.listcode(0);
+        while (sym == Symbol.funcsym) {
+            nextSym();//读进 function name
+            parseFuncDeclaration(lev + 1, fsys);
+        }
 
-                    do {
-                        while (sym == Symbol.funcsym) {
-                            nextSym();//读进 function name
-                            if (sym == Symbol.ident) {
-                                table.enter(Objekt.function, lev + 1, dx);
-                                nextSym();//读进 '{'
-                                parseFuncDeclaration(lev + 1, fsys);
-                            } else {
-                                Err.report(5);
-                            }
-                        }
-                    } while (declbegsys.get(sym));
+        if (sym == Symbol.mainsym) {
+            int mainStartAddr = interp.cx; // 记录 INT 指令位置，稍后回填 dx
+            interp.gen(Fct.INT, 0, 0);    // 占位：实际 dx 等语句处理完后再填
+            interp.setCode(jmpToMainAddr, Fct.JMP, lev + 1, mainStartAddr); // 回填跳转地址
 
-                    if (sym == Symbol.mainsym) {
-                        table.enter(Objekt.function, lev + 1, dx);
+            int mainDx0 = dx;
+            table.enter(Objekt.mainfunc, lev + 1, dx); // main 的名字表项
+            int mainTx0 = table.tx;  // main 的符号表起始点
 
-                        dx0 = dx;                        // 记录本层之前的数据量（以便恢复）
-                        dx = 3;
-                        tx0 = table.tx;                  // 记录本层名3字的初始位置（以便恢复）
-                        table.get(table.tx).adr = interp.cx;
+            nextSym();//读进 '{'
+            if (sym == Symbol.lbrace) {
+                nextSym(); // 读入 main 的语句体
+                parseStatementList(lev + 2, fsys);
 
-                        cx0 = interp.cx;
-                        interp.code[0].a = cx0;
-                        interp.gen(Fct.INT, 0, 3);            // 生成分配内存代码
+                // 填写 main 名字表信息
+                Table.Item item = table.get(mainTx0);
+                item.adr = mainStartAddr;
+                item.size = dx;
+                interp.setCode(mainStartAddr, Fct.INT, lev + 1, dx); // 回填内存分配大小
 
-                        nextSym();//读进 '{'
-                        if (sym == Symbol.lbrace) {
-                            nextSym();//读进 StatementList
-                            parseStatementList(lev + 2, fsys);
-                            if (sym == Symbol.rbrace) {
+                if (sym == Symbol.rbrace) {
+                    table.debugTable(mainTx0);
+                    // 恢复作用域指针
+                    dx = mainDx0;
+                    table.tx = mainTx0;
 
+                    nextSym();//读进 program '}'
 
-                                nextSym();//读进 program '}'
-                            } else {
-                                Err.report(17);
-                            }
-                        } else {
-                            Err.report(16);
-                        }
-
-//                        // 开始生成当前过程代码
-                        Table.Item item = table.get(tx0);
-//                        interp.code[item.adr].a = interp.cx;
-                        item.adr = cx0;                    // 当前过程代码地址
-                        item.size = dx;                          // 声明部分中每增加一条声明都会给dx增加1，
-                        interp.code[cx0].a = dx;
-                        // 声明部分已经结束，dx就是当前过程的堆栈帧大小
-
-
-                        table.debugTable(tx0);
-//                        interp.listcode(cx0);
-
-                        dx = dx0;                            // 恢复堆栈帧计数器
-                        table.tx = tx0;                        // 回复名字表位置
-
-                    } else {
-                        Err.report(15);
-                    }
-
-                    // program 的最后
-                    if (sym != Symbol.rbrace) {
-//                      interp.gen(Fct.RET, 0, 1);
-                        Err.report(4);
-                    }
-//                    else {
-//                        Err.report(4);
-//                    }
-
+                    // 程序结束，生成HLT指令
+                    interp.gen(Fct.HLT, 0, 0);
                 } else {
-                    Err.report(3);
+                    Err.report(17);
                 }
             } else {
-                Err.report(2);
+                Err.report(16);
             }
-
         } else {
-            Err.report(1);
+            Err.report(15);
         }
     }
 
-    private void parseFuncDeclaration(int lev, SymSet fsys) {
+    private void parseStructDeclaration(int lev, SymSet fsys) {
         int dx0, tx0, cx0;               // 保留初始dx，tx和cx
         SymSet nxtlev = new SymSet(symnum);
 
         dx0 = dx;                        // 记录本层之前的数据量（以便恢复）
-        dx = 3;
+        dx = 0;
         tx0 = table.tx;                  // 记录本层名字的初始位置（以便恢复）
         table.get(table.tx).adr = interp.cx;
-//        interp.gen(Fct.JMP, 0, 0);
 
-        if (sym == Symbol.lparen) {
+        if (sym == Symbol.lbrace) {
             cx0 = interp.cx;
-            interp.gen(Fct.INT, 0, 3);            // 生成分配内存代码
+            interp.gen(Fct.INT, 0, 0);            // 生成分配内存代码
 
-            nextSym();//读进 ParamList 或者 ')'
-            parseParamList(lev + 1, nxtlev);
-            if (sym == Symbol.rparen) {
-                nextSym();//读进 '{'
-                if (sym == Symbol.lbrace) {
-                    nextSym();//读进 StatementList
-                    parseStatementList(lev + 1, nxtlev);
-                    if (sym == Symbol.returnsym) {
-                        nextSym();//读进 Expression
-                        parseExpression(lev, nxtlev);
+            nextSym();//读进 MemberList
 
-                        interp.gen(Fct.RET, 0, 0); // 函数返回值处理
-                        if (sym == Symbol.semicolon) {
-                            nextSym();//读进 '}'
-                            if (sym == Symbol.rbrace) {
+            parseMemberList(lev + 1, nxtlev, tx0);
 
-                                // 开始生成当前过程代码
-                                Table.Item item = table.get(tx0);
-//                                interp.code[item.adr].a = interp.cx;
-                                item.adr = cx0;                    // 当前过程代码地址
-                                item.size = dx;                          // 声明部分中每增加一条声明都会给dx增加1，
-                                interp.code[cx0].a = dx;
-                                // 声明部分已经结束，dx就是当前过程的堆栈帧大小
+            if (sym == Symbol.rbrace) {
+                // 开始生成当前过程代码
+                Table.Item item = table.get(tx0);
+                item.adr = cx0;                    // 当前过程代码地址
+                item.size = dx;                    // 声明部分中每增加一条声明都会给dx增加1，
+                interp.code[cx0].a = dx;
+                // 声明部分已经结束，dx就是当前过程的堆栈帧大小
+                table.debugTable(tx0);
 
-                                table.debugTable(tx0);
+                dx = dx0;                            // 恢复堆栈帧计数器
+                table.tx = tx0;                        // 回复名字表位置
 
-                                dx = dx0;                            // 恢复堆栈帧计数器
-                                table.tx = tx0;                        // 回复名字表位置
-//                                interp.listcode(cx0);
-
-                                nextSym();//读进 next function name or main
-                            } else {
-                                Err.report(10);
-                            }
-                        } else {
-                            Err.report(40);
-                        }
-                    } else {
-                        Err.report(12);
-                    }
-                } else {
-                    Err.report(8);
-                }
+                nextSym();
             } else {
-                Err.report(7);
+                Err.report(48);
             }
         } else {
-            Err.report(6);
+            Err.report(47);
         }
+
     }
 
-    private void parseParamList(int lev, SymSet fsys) {
+    private void parseMemberList(int lev, SymSet fsys, int tx0) {
+        Table.Item item = table.get(tx0);
+
         if (sym == Symbol.ident) {
             table.enter(Objekt.variable, lev, dx);
             dx++;
+            nextSym();//读进 ','
+            while (sym == Symbol.comma) {
+                nextSym();//读进 下一个ident
+                if (sym == Symbol.ident) {
+                    table.enter(Objekt.variable, lev, dx);
+                    dx++;
+                    nextSym();
+                } else {
+                    Err.report(34);
+                }
+            }
+        }
+    }
+
+    private void parseFuncDeclaration(int lev, SymSet fsys) {
+        dx = 3;
+
+        SymSet nxtlev;
+        if (sym == Symbol.ident) {
+            int funcStartAddr = interp.cx; // 记录 INT 指令位置，稍后回填 dx
+            interp.gen(Fct.INT, 0, 0);    // 占位：实际 dx 等语句处理完后再填
+
+            int funcDx0 = dx;
+            table.enter(Objekt.function, lev, dx);
+            int funcTx0 = table.tx;  // func 的符号表起始点
+
+            nextSym();//读进 '{'
+            if (sym == Symbol.lparen) {
+                nextSym();//读进 ParamList 或者 ')'
+                if (sym != Symbol.rparen) {
+                    parseParamList(lev + 1, funcTx0, fsys);
+                }
+
+                if (sym == Symbol.rparen) {
+                    nextSym();//读进 '{'
+                    if (sym == Symbol.lbrace) {
+                        nextSym();//读进 StatementList
+                        parseStatementList(lev + 1, fsys);
+                        if (sym == Symbol.returnsym) {
+                            nextSym();//读进 Expression
+
+                            // 解析返回表达式
+                            nxtlev = fsys;
+                            nxtlev.set(Symbol.semicolon);
+                            parseExpression(lev + 1, nxtlev);
+
+                            interp.gen(Fct.RET, 0, 0); // 函数返回值处理
+                            if (sym == Symbol.semicolon) {
+                                nextSym();//读进 '}'
+
+                                // 填写 func 名字表信息
+                                Table.Item item = table.get(funcTx0);
+                                item.adr = funcStartAddr;
+                                item.size = dx;
+                                interp.setCode(funcStartAddr, Fct.INT, lev, dx); // 回填内存分配大小
+
+                                if (sym == Symbol.rbrace) {
+                                    table.debugTable(funcTx0);
+                                    // 恢复作用域指针
+                                    dx = funcDx0;
+                                    table.tx = funcTx0;
+
+                                    nextSym();//读进 next function name or main
+                                } else {
+                                    Err.report(10);
+                                }
+                            } else {
+                                Err.report(40);
+                            }
+                        } else {
+                            Err.report(12);
+                        }
+                    } else {
+                        Err.report(8);
+                    }
+                } else {
+                    Err.report(7);
+                }
+            } else {
+                Err.report(6);
+            }
+        } else {
+            Err.report(5);
+        }
+    }
+
+    private void parseParamList(int lev, int tx0, SymSet fsys) {
+        Table.Item item = table.get(tx0);
+        if (sym == Symbol.ident) {
+            table.enter(Objekt.variable, lev, dx);
+            dx++;
+            item.paramsize++;
             nextSym();
             while (sym == Symbol.comma) {
                 nextSym();//读进 next ident
                 if (sym == Symbol.ident) {
                     table.enter(Objekt.variable, lev, dx);
                     dx++;
+                    item.paramsize++;
                     nextSym();
                 } else {
                     Err.report(13);
@@ -276,16 +340,13 @@ public class Parser {
     }
 
     private void parseStatement(int lev, SymSet fsys) {
-        int i; // table表中的位置
-        SymSet nxtlev;
-
-        i = table.position(lex.id);
         switch (sym) {
             case letsym:
                 nextSym();//读进 DeclareStatement
                 parseDeclareStatement(lev, fsys);
                 break;
             case ident:
+                int i = table.position(lex.id); // table表中的位置
                 if (i > 0) {
                     Table.Item item = table.get(i);
                     if (item.kind == Objekt.variable) {
@@ -294,7 +355,21 @@ public class Parser {
                     } else if (item.kind == Objekt.function) {
                         nextSym();//读进 FuncCallStatement
                         parseFuncCallStatement(lev, fsys);
-                        interp.gen(Fct.CAL, lev - item.level, item.adr);
+                        interp.gen(Fct.CAL, item.paramsize, item.adr);
+                    } else if (item.kind == Objekt.array) {
+                        nextSym();//读进
+                        if (sym == Symbol.lbracket) {
+                            nextSym();//读进 Expression
+                            parseExpression(lev, fsys);
+                            if (sym == Symbol.rbracket) {
+                                nextSym();
+                                parseAssignStatement(lev, fsys);
+                            } else {
+                                Err.report(45);
+                            }
+                        } else {
+                            Err.report(44);
+                        }
                     } else {
                         Err.report(18);
                     }
@@ -319,7 +394,8 @@ public class Parser {
                 parseOutputStatement(lev, fsys);
                 break;
             default:
-                nxtlev = new SymSet(symnum);
+                Err.report(53);// 非法语句
+                nextSym();// 跳过错误符号
                 break;
         }
     }
@@ -328,6 +404,9 @@ public class Parser {
         if (sym == Symbol.lparen) {
             nextSym();//读进 '('
             parseExpression(lev, fsys);
+            interp.gen(Fct.OPR, 0, 14);
+            interp.gen(Fct.OPR, 0, 15);
+
             while (sym == Symbol.comma) {
                 nextSym();//读进 ','
                 parseExpression(lev, fsys);
@@ -346,14 +425,27 @@ public class Parser {
     }
 
     private void parseInputStatement(int lev, SymSet fsys) {
+        int i;
+        Table.Item item;
         if (sym == Symbol.lparen) {
             nextSym();//读进 '('
             if (sym == Symbol.ident) {
                 nextSym();//读进 ident
+
+                i = table.position(lex.id);
+                item = table.get(i);
+                interp.gen(Fct.OPR, 0, 16);
+                interp.gen(Fct.STO, lev - item.level, item.adr);
+
                 while (sym == Symbol.comma) {
                     nextSym();//读进 ','
                     if (sym == Symbol.ident) {
                         nextSym();
+
+                        i = table.position(lex.id);
+                        item = table.get(i);
+                        interp.gen(Fct.OPR, 0, 16);
+                        interp.gen(Fct.STO, lev - item.level, item.adr);
                     } else {
                         Err.report(34);
                     }
@@ -373,7 +465,6 @@ public class Parser {
         if (sym == Symbol.lparen) {
             nextSym(); //读进 '('
             parseArgListStatement(lev, fsys);
-            interp.gen(Fct.STO, lev, 0);
             if (sym == Symbol.rparen) {
                 nextSym();//读进 ')'
             } else {
@@ -393,40 +484,45 @@ public class Parser {
     }
 
     private void parseWhileStatement(int lev, SymSet fsys) {
-        int dx0;               // 保留初始dx，tx和cx
-        int cx1, cx2;
+        int whileStartAddr = interp.cx; // 记录判断条件操作的位置
+        int whileDx0 = dx;
+        int whileTx0 = table.tx;  // whlie 的符号表起始点
+        dx = 3;
 
         if (sym == Symbol.lparen) {
-
-            cx1 = interp.cx; // 记录判断条件操作的位置
-
             nextSym();//读进 '('
             parseBoolExpression(lev, fsys);
-
-            cx2 = interp.cx;
-            interp.gen(Fct.JPC, 0, 0);
-            interp.gen(Fct.CAL, 0, cx2 + 3);
-            interp.gen(Fct.INT, 0, 3);
-
             if (sym == Symbol.rparen) {
                 nextSym();//读进 ')'
 
-                dx0 = dx;                        // 记录本层之前的数据量（以便恢复）
-                dx = 3;
+                int calStartAddr = interp.cx;
+                interp.gen(Fct.JPC, 0, 0); // 占位：实际 dx 等语句处理完后再填
+                interp.gen(Fct.CAL, 0, calStartAddr + 2);
+                interp.gen(Fct.INT, 0, 0); // 占位：实际 dx 等语句处理完后再填
                 if (sym == Symbol.lbrace) {
                     nextSym();//读进 '{'
                     parseStatementList(lev + 1, fsys);
 
                     interp.gen(Fct.RET, 0, 1);
-                    interp.gen(Fct.JMP, 0, cx1); // 循环体结束后跳转到判断条件
+                    interp.gen(Fct.JMP, 0, whileStartAddr); // 循环体结束后跳转到判断条件
+
+                    // 填写 while 名字表信息
+                    Table.Item item = table.get(whileTx0);
+                    item.adr = whileStartAddr;
+                    item.size = dx;
+                    interp.setCode(calStartAddr, Fct.JPC, 0, interp.cx); // 回填内存分配大小
+                    interp.setCode(calStartAddr + 2, Fct.INT, lev, dx); // 回填内存分配大小
 
                     if (sym == Symbol.rbrace) {
+//                        table.debugTable(whileTx0);
+                        // 恢复作用域指针
+                        dx = whileDx0;
+                        table.tx = whileTx0;
+
                         nextSym();//读进 '}'
                     } else {
                         Err.report(29);
                     }
-
-                    dx = dx0;                            // 恢复堆栈帧计数器
                 } else {
                     Err.report(28);
                 }
@@ -439,63 +535,78 @@ public class Parser {
     }
 
     private void parseIfStatement(int lev, SymSet fsys) {
-        int dx0, dx1;               // 保留初始dx
         int cx1, cx2;
 
+        int ifTx0 = table.tx;  // whlie 的符号表起始点
+        int ifDx0 = dx;
         if (sym == Symbol.lparen) {
             nextSym();//读进 BoolExpression
             parseBoolExpression(lev, fsys);
-
-            cx1 = interp.cx;
-            interp.gen(Fct.JPC, 0, 0);
-            interp.gen(Fct.CAL, 0, cx1 + 3);
-            interp.gen(Fct.INT, 0, 3);
             if (sym == Symbol.rparen) {
                 nextSym();//读进 '{'
 
-                dx0 = dx;                        // 记录本层之前的数据量（以便恢复）
-                dx = 3;
+                cx1 = interp.cx;
+                interp.gen(Fct.JPC, 0, 0); // 占位：实际 dx 等语句处理完后再填
+                interp.gen(Fct.CAL, 0, cx1 + 2);
+                interp.gen(Fct.INT, 0, 0); // 占位：实际 dx 等语句处理完后再填
+
                 if (sym == Symbol.lbrace) {
                     nextSym();//读进 StatementList
+
+                    table.tx = ifTx0;
+                    dx = 3;
+
                     parseStatementList(lev + 1, fsys);
                     interp.gen(Fct.RET, 0, 1);
 
+                    interp.setCode(cx1, Fct.JPC, 0, interp.cx); // 回填内存分配大小
+                    interp.setCode(cx1 + 2, Fct.INT, lev, dx); // 回填内存分配大小
+
                     if (sym == Symbol.rbrace) {
                         nextSym();//读进 '}'
+//                        table.debugTable(ifTx0);
+                        // 恢复作用域指针
+                        dx = ifDx0;
+                        table.tx = ifTx0;
 
+                        int elseTx0 = table.tx;  // else 的符号表起始点
+                        int elseDx0 = dx;
                         if (sym == Symbol.elsesym) {
                             nextSym();//读进 '{'
 
-                            dx1 = dx;                        // 记录本层之前的数据量（以便恢复）
-                            dx = 3;
+                            cx2 = interp.cx;
+                            interp.gen(Fct.JMP, 0, 0);
+                            interp.setCode(cx1, Fct.JPC, 0, cx2 + 1); // 回填内存分配大小
+                            interp.gen(Fct.CAL, 0, cx2 + 2);
+                            interp.gen(Fct.INT, 0, 0);
                             if (sym == Symbol.lbrace) {
                                 nextSym();//读进 StatementList
 
-                                cx2 = interp.cx;
-                                interp.gen(Fct.JMP, 0, 0);
-                                interp.gen(Fct.CAL, 0, cx2 + 3);
-                                interp.gen(Fct.INT, 0, 3);
+                                table.tx = elseTx0;
+                                dx = 3;
 
                                 parseStatementList(lev + 1, fsys);
-
                                 interp.gen(Fct.RET, 0, 1);
+
+                                interp.setCode(cx2, Fct.JMP, 0, interp.cx); // 回填内存分配大小
+                                interp.setCode(cx2 + 2, Fct.INT, lev, dx); // 回填内存分配大小
 
                                 if (sym == Symbol.rbrace) {
                                     nextSym();
+//                                    table.debugTable(elseTx0);
+                                    // 恢复作用域指针
+                                    dx = elseDx0;
+                                    table.tx = elseTx0;
                                 } else {
                                     Err.report(25);
                                 }
                             } else {
                                 Err.report(24);
                             }
-
-                            dx = dx1;                            // 恢复堆栈帧计数器
                         }
                     } else {
                         Err.report(23);
                     }
-
-                    dx = dx0;                            // 恢复堆栈帧计数器
                 } else {
                     Err.report(22);
                 }
@@ -562,21 +673,103 @@ public class Parser {
 
     private void parseDeclareStatement(int lev, SymSet fsys) {
         int i;
-        i = table.position(lex.id);
+        Table.Item item;
 
         if (sym == Symbol.ident) {
             table.enter(Objekt.variable, lev, dx);
             dx++;
-
-            nextSym();//读进 var
+            i = table.position(lex.id);
+            nextSym();//读进 '=' 或者 ‘:’
             if (sym == Symbol.becomes) {
-                nextSym(); //读进 '='
+                nextSym(); //读进 Expression
                 parseExpression(lev, fsys);
-                Table.Item item = table.get(i);
+                item = table.get(i);
+//                System.out.println("name:" + item.name);
                 interp.gen(Fct.STO, lev - item.level, item.adr);
+            } else if (sym == Symbol.colon) {
+                table.enter(Objekt.array, lev, dx);
+                dx++;
+
+                nextSym(); //读进 ArraySuffix
+                parseArraySuffix(lev, fsys);
+                if (sym == Symbol.becomes) {
+                    nextSym();
+                    parseArrayInitExpression(lev, fsys);
+                }
             }
+
+
         } else {
             Err.report(13);
+        }
+    }
+
+    private void parseArrayInitExpression(int lev, SymSet fsys) {
+        if (sym == Symbol.lbracket) {
+            nextSym();//读进 Expression
+            parseExpression(lev, fsys);
+
+            while (sym == Symbol.comma) {
+                nextSym();//读进 ','
+                parseExpression(lev, fsys);
+            }
+
+            if (sym == Symbol.rbracket) {
+                nextSym();
+            } else {
+                Err.report(43);
+            }
+        } else {
+            Err.report(42);
+        }
+    }
+
+    private void parseArraySuffix(int lev, SymSet fsys) {
+        int dx0 = dx;
+        int cx0;
+        int tx0;
+        dx = 0;
+        int i = table.position(lex.id);
+        Table.Item item = table.get(i);
+        tx0 = table.tx;                  // 记录本层名字的初始位置（以便恢复）
+
+        cx0 = interp.cx;
+        table.get(table.tx).adr = interp.cx;
+        interp.gen(Fct.INT, 0, 0);
+
+        if (sym == Symbol.lbracket) {
+            nextSym();//读进 number
+
+            if (sym == Symbol.number) {
+                dx = lex.num;
+                if (lex.num > L25.amax) {
+                    Err.report(41);
+                    lex.num = 0;
+                }
+                interp.gen(Fct.INT, 0, dx);
+
+                nextSym();
+                if (sym == Symbol.rbracket) {
+                    nextSym();
+
+                    item.adr = cx0;                    // 当前过程代码地址
+                    item.size = dx;                          // 声明部分中每增加一条声明都会给dx增加1，
+                    interp.code[cx0].a = dx;
+                    // 声明部分已经结束，dx就是当前过程的堆栈帧大小
+
+                    table.debugTable(tx0);
+
+                    dx = dx0;                            // 恢复堆栈帧计数器
+                    table.tx = tx0;                        // 回复名字表位置
+                } else {
+                    Err.report(43);
+                }
+            } else {
+                Err.report(51);
+            }
+
+        } else {
+            Err.report(42);
         }
     }
 
@@ -661,9 +854,24 @@ public class Parser {
                         interp.gen(Fct.LOD, lev - item.level, item.adr);
                         nextSym();//读进 var
                     } else if (item.kind == Objekt.function) {
-                        interp.gen(Fct.CAL, lev - item.level, item.adr);
+
                         nextSym();//读进 func_call
                         parseFuncCallStatement(lev, fsys);
+                        interp.gen(Fct.CAL, item.paramsize, item.adr);
+                    } else if (item.kind == Objekt.array) {
+                        nextSym();//读进 '['
+                        if (sym == Symbol.lbracket) {
+                            nextSym(); // 读进 Expression
+                            parseExpression(lev, fsys);
+                            if (sym == Symbol.rbracket) {
+                                interp.gen(Fct.LOD, lev - item.level, item.adr);
+                                nextSym();
+                            } else {
+                                Err.report(45);
+                            }
+                        } else {
+                            Err.report(44);
+                        }
                     } else {
                         Err.report(19);
                     }

@@ -4,7 +4,7 @@ package github.calabchen;
  * 符号类型，为避免和Java的关键字Object冲突，改成Objekt
  */
 enum Objekt {
-    variable, function, mainfunc
+    variable, function, mainfunc, array, struct
 }
 
 /**
@@ -17,6 +17,7 @@ public class Table {
         int level;          // 所处层
         int adr;            // 地址
         int size;           // 需要分配的数据区空间
+        int paramsize;      // 形参个数，仅function使用
     }
 
     /**
@@ -57,6 +58,7 @@ public class Table {
         Item item = get(tx);
         item.name = L25.lex.id;                 // 注意id和num都是从词法分析器获得
         item.kind = k;
+
         switch (k) {
             case variable:                      // 变量名字
                 item.level = lev;
@@ -66,6 +68,12 @@ public class Table {
                 item.level = lev;
                 break;
             case mainfunc:                      // 函数名字
+                item.level = lev;
+                break;
+            case array:                      // 数组名字
+                item.level = lev;
+                break;
+            case struct:                     // 结构体名字
                 item.level = lev;
                 break;
         }
@@ -113,6 +121,22 @@ public class Table {
                             i, kindString, name, currentItem.level, currentItem.size);
                     System.out.println(mainLine);
                     L25.fas.println(mainLine);
+                    break;
+                case array:
+                    kindString = "array";
+                    // 格式：序号 | kind | name | lev=level | size=size
+                    String arrayLine = String.format("%2d %5s %-10s lev=%2d size=%3d",
+                            i, kindString, name, currentItem.level, currentItem.size);
+                    System.out.println(arrayLine);
+                    L25.fas.println(arrayLine);
+                    break;
+                case struct:
+                    kindString = "struct";
+                    // 格式：序号 | kind | name | lev=level | size=size
+                    String structLine = String.format("%2d %5s %-10s lev=%2d size=%3d",
+                            i, kindString, name, currentItem.level, currentItem.size);
+                    System.out.println(structLine);
+                    L25.fas.println(structLine);
                     break;
                 default:
                     String msg = String.format("%2d OOPS! UNKNOWN ITEM! Kind: %s, Name: %s", i, currentItem.kind, currentItem.name);

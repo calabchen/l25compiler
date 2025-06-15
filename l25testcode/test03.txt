@@ -7,6 +7,15 @@ program MyApp {
 
     main {
         let x = 5;
-        let y = add(x, 10);
+        output(x);
+
+        let y;
+        input(y);
+        output(y);
+
+        let z;
+        output(z);
+        z = add(x, y);
+        output(z);
     }
 }

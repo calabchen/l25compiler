@@ -23,5 +23,5 @@ public enum Symbol {
     // 关键字
     programsym, mainsym, funcsym,
     ifsym, elsesym, whilesym, inputsym, outputsym,
-    letsym, returnsym
+    letsym, returnsym, structsym
 }

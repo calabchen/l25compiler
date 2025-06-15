@@ -10,9 +10,7 @@ the requirement is to complete L25 grammar.
 > 
 >  **Support One-dimensional static array and structure**
 ```text
-<programming> = "program" <ident> "{" { const_def } { <struct_def> } { <func_def> } "main" "{" <stmt_list> "}" "}"
-
-<const_def> = "const" <ident> "=" <number> ";"
+<programming> = "program" <ident> "{" { <struct_def> } { <func_def> } "main" "{" <stmt_list> "}" "}"
 
 <struct_def> = <struct> <ident> "{" [ <member_list> ] "}"
 
@@ -34,18 +32,21 @@ the requirement is to complete L25 grammar.
 
 <declare_stmt>  = "let" <ident> (
                     | "=" ( <expr> | <struct_init_expr>)
-                    | ":" <array_type_suffix> [ "=" <array_init_expr> ]
+                    | ":" <array_suffix> [ "=" <array_init_expr> ]
+                    | ":" <struct_suffix> [ "=" <struct_init_expr> ]
                     )
                 
-<array_type_suffix> = "[" <array_size> "]"
+<array_suffix> = "[" <array_size> "]"
 
-<array_size> = <expr>
+<array_size> = <number>
 
-<array_init_expr> = "[" [ ( <expr> | <struct_init_expr> ) { "," ( <expr> | <struct_init_expr> ) } ] "]" .
+<array_init_expr> = "[" [ <expr>  { ","  <expr> } ] "]"
 
-struct_init_expr = ident "{" [ assign_list] "}" .
+<struct_suffix> = <ident>
+ 
+<struct_init_expr> = "{" [ assign_list ] "}"
 
-assign_list = ident "=" expr { "," ident "=" expr } .
+assign_list = ident "=" expr { "," ident "=" expr }
 
 <assign_stmt> = <factor> "=" <expr>
 
@@ -67,12 +68,12 @@ assign_list = ident "=" expr { "," ident "=" expr } .
 
 <term> = <factor> { ("*" | "/") <factor> }
 
-<factor> = <ident>                  (* 简单变量，例如 x, y, z *)
-         | <ident> "[" <expr> "]"   (* 数组元素访问，索引可以是表达式。例如 arr2[i], p2.node[j] *)
-         | <ident> "." <ident>      (* 结构体成员访问，例如 p1.val, p2.val *)
-         | <number>                 (* 数字字面量，例如 0, 1, 2 *)
-         | "(" <expr> ")"           (* 带括号的表达式 *)
-         | <func_call>              (* 函数调用，例如 add(a, b) *)
+<factor> = <ident>                 
+         | <ident> "[" <expr> "]"   
+         | <ident> "." <ident>      
+         | <number>                
+         | "(" <expr> ")"           
+         | <func_call>              
 
 <ident> = <letter> { <letter> | <digit> }
 
