@@ -1,38 +1,16 @@
 program MyApp {
 
-    func add(a, b, c){
-        let sum = a+b;
-        let res1 = sum;
-        if(res1 > 2){
-            let res2 = res1;
-        }else{
-            let res3 = res1;
-        };
-        return sum;
-    }
-
-    func square(x) {
-        let result = x * x;
-        return result;
-    }
+    struct point{a, b, c : [2]}
 
     main {
-        let x;
-        x=1;
-        let y = 2;
+        let p : point;
+        p.b = 1;
+        output(p.b);
 
-        let z = 1;
-        if (z > 50) {
-            let q1 = 1;
-            output(z);
-        }else{
-            let q2 = 1;
-            output(0);
-        };
-
-        while(y <= 3){
-            let w = y + 1;
-            y = y + 1;
-        };
+        let q : point = {1,2,3,4};
+        output(q.a);
+        output(q.b);
+        output(q.c[0]);
+        output(q.c[1]);
     }
 }

@@ -119,21 +119,16 @@ public class Parser {
             Err.report(52);
         }
 
-        while (sym == Symbol.structsym) {
-            nextSym();//读进 struct name
-            if (sym == Symbol.ident) {
-                table.enter(Objekt.struct, lev + 1, dx);
-                nextSym();//读进 '{'
+        do {
+            while (sym == Symbol.structsym) {
+                nextSym();//读进 struct name
                 parseStructDeclaration(lev + 1, fsys);
-            } else {
-                Err.report(46);
             }
-        }
-
-        while (sym == Symbol.funcsym) {
-            nextSym();//读进 function name
-            parseFuncDeclaration(lev + 1, fsys);
-        }
+            while (sym == Symbol.funcsym) {
+                nextSym();//读进 function name
+                parseFuncDeclaration(lev + 1, fsys);
+            }
+        } while (declbegsys.get(sym));
 
         if (sym == Symbol.mainsym) {
             int mainStartAddr = interp.cx; // 记录 INT 指令位置，稍后回填 dx
@@ -177,67 +172,100 @@ public class Parser {
     }
 
     private void parseStructDeclaration(int lev, SymSet fsys) {
-        int dx0, tx0, cx0;               // 保留初始dx，tx和cx
-        SymSet nxtlev = new SymSet(symnum);
-
-        dx0 = dx;                        // 记录本层之前的数据量（以便恢复）
-        dx = 0;
-        tx0 = table.tx;                  // 记录本层名字的初始位置（以便恢复）
-        table.get(table.tx).adr = interp.cx;
-
-        if (sym == Symbol.lbrace) {
-            cx0 = interp.cx;
-            interp.gen(Fct.INT, 0, 0);            // 生成分配内存代码
-
-            nextSym();//读进 MemberList
-
-            parseMemberList(lev + 1, nxtlev, tx0);
-
-            if (sym == Symbol.rbrace) {
-                // 开始生成当前过程代码
-                Table.Item item = table.get(tx0);
-                item.adr = cx0;                    // 当前过程代码地址
-                item.size = dx;                    // 声明部分中每增加一条声明都会给dx增加1，
-                interp.code[cx0].a = dx;
-                // 声明部分已经结束，dx就是当前过程的堆栈帧大小
-                table.debugTable(tx0);
-
-                dx = dx0;                            // 恢复堆栈帧计数器
-                table.tx = tx0;                        // 回复名字表位置
-
-                nextSym();
-            } else {
-                Err.report(48);
-            }
-        } else {
-            Err.report(47);
-        }
-
-    }
-
-    private void parseMemberList(int lev, SymSet fsys, int tx0) {
-        Table.Item item = table.get(tx0);
-
         if (sym == Symbol.ident) {
-            table.enter(Objekt.variable, lev, dx);
-            dx++;
-            nextSym();//读进 ','
-            while (sym == Symbol.comma) {
-                nextSym();//读进 下一个ident
-                if (sym == Symbol.ident) {
-                    table.enter(Objekt.variable, lev, dx);
-                    dx++;
+            table.enter(Objekt.struct, lev, dx);
+            String structName = lex.id;
+
+            nextSym();//读进 '{'
+            if (sym == Symbol.lbrace) {
+                nextSym();//读进 MemberList
+                parseMemberList(lev + 1, structName, fsys);
+                if (sym == Symbol.rbrace) {
                     nextSym();
                 } else {
-                    Err.report(34);
+                    Err.report(48);
                 }
+            } else {
+                Err.report(47);
             }
+        } else {
+            Err.report(46);
+        }
+    }
+
+    private void parseMemberList(int lev, String name, SymSet fsys) {
+        int memberDx0 = dx;
+        dx = 0;
+
+        // 结构体内部至少要有一个成员
+        if (sym == Symbol.ident) {
+            parseMemberDeclaration(lev, name, fsys);
+        } else {
+            Err.report(60); // 错误：此处应为member name
+        }
+
+        while (sym == Symbol.comma) {
+            nextSym();
+            if (sym == Symbol.ident) {
+                parseMemberDeclaration(lev, name, fsys);
+            } else {
+                Err.report(34); // 错误：此处应为member name
+            }
+        }
+        dx = memberDx0;
+    }
+
+    private void parseMemberDeclaration(int lev, String name, SymSet fsys) {
+        int i = table.position(name);
+        Table.Item item = table.get(i);
+
+        String memberName = lex.id;
+        Table.Item member = new Table.Item();
+
+        nextSym();
+        // 2. 判断成员是数组还是普通变量
+        if (sym == Symbol.colon) {
+            nextSym(); // 读入 '['
+            if (sym == Symbol.lbracket) {
+                nextSym(); // 读入数组长度
+                if (sym == Symbol.number) {
+                    member.name = memberName;
+                    member.kind = Objekt.array;
+                    member.size = lex.num;
+                    member.adr = dx;
+                    dx += lex.num;
+
+                    item.memberList.put(memberName, member);
+                    item.size = item.size + lex.num;
+
+                    nextSym();
+                    if (sym == Symbol.rbracket) {
+                        nextSym(); // 成功，读入下一个符号
+                    } else {
+                        Err.report(43); // 缺少 ']'
+                    }
+
+                } else {
+                    Err.report(51); // 缺少数组长度
+                }
+            } else {
+                Err.report(42); // 缺少 '['
+            }
+        } else {
+            // --- 处理普通变量成员 ---
+            // 如果不是冒号，那它就是普通变量
+            member.name = memberName;
+            member.kind = Objekt.variable;
+            member.adr = dx;
+            dx++;
+
+            item.memberList.put(memberName, member);
+            item.size = item.size + 1;
         }
     }
 
     private void parseFuncDeclaration(int lev, SymSet fsys) {
         dx = 3;
-
         SymSet nxtlev;
         if (sym == Symbol.ident) {
             int funcStartAddr = interp.cx; // 记录 INT 指令位置，稍后回填 dx
@@ -335,6 +363,7 @@ public class Parser {
                 nextSym();
             } else {
                 Err.report(14);
+                break;
             }
         } while (statbegsys.get(sym));
     }
@@ -349,27 +378,13 @@ public class Parser {
                 int i = table.position(lex.id); // table表中的位置
                 if (i > 0) {
                     Table.Item item = table.get(i);
-                    if (item.kind == Objekt.variable) {
-                        nextSym();//读进 AssignStatement
+                    if (item.kind == Objekt.variable || item.kind == Objekt.array || item.kind == Objekt.struct) {
+//                        nextSym();//读进 AssignStatement
                         parseAssignStatement(lev, fsys);
                     } else if (item.kind == Objekt.function) {
                         nextSym();//读进 FuncCallStatement
                         parseFuncCallStatement(lev, fsys);
                         interp.gen(Fct.CAL, item.paramsize, item.adr);
-                    } else if (item.kind == Objekt.array) {
-                        nextSym();//读进
-                        if (sym == Symbol.lbracket) {
-                            nextSym();//读进 Expression
-                            parseExpression(lev, fsys);
-                            if (sym == Symbol.rbracket) {
-                                nextSym();
-                                parseAssignStatement(lev, fsys);
-                            } else {
-                                Err.report(45);
-                            }
-                        } else {
-                            Err.report(44);
-                        }
                     } else {
                         Err.report(18);
                     }
@@ -429,13 +444,27 @@ public class Parser {
         Table.Item item;
         if (sym == Symbol.lparen) {
             nextSym();//读进 '('
+
             if (sym == Symbol.ident) {
                 nextSym();//读进 ident
 
                 i = table.position(lex.id);
                 item = table.get(i);
-                interp.gen(Fct.OPR, 0, 16);
-                interp.gen(Fct.STO, lev - item.level, item.adr);
+
+                if (item.kind == Objekt.variable) {
+                    interp.gen(Fct.OPR, 0, 16);
+                    interp.gen(Fct.STO, lev - item.level, item.adr);
+                } else if (item.kind == Objekt.array) {
+                    parseArrayRef(lev, fsys);
+                    interp.gen(Fct.OPR, 0, 16);
+                    interp.gen(Fct.STP, lev - item.level, 0);
+                } else if (item.kind == Objekt.struct) {
+                    parseStructRef(lev, fsys);
+                    interp.gen(Fct.OPR, 0, 16);
+                    interp.gen(Fct.STP, lev - item.level, 0);
+                } else {
+                    Err.report(18);
+                }
 
                 while (sym == Symbol.comma) {
                     nextSym();//读进 ','
@@ -444,13 +473,24 @@ public class Parser {
 
                         i = table.position(lex.id);
                         item = table.get(i);
-                        interp.gen(Fct.OPR, 0, 16);
-                        interp.gen(Fct.STO, lev - item.level, item.adr);
+
+                        if (item.kind == Objekt.variable) {
+                            interp.gen(Fct.OPR, 0, 16);
+                            interp.gen(Fct.STO, lev - item.level, item.adr);
+                        } else if (item.kind == Objekt.array) {
+                            parseArrayRef(lev, fsys);
+                            interp.gen(Fct.OPR, 0, 16);
+                            interp.gen(Fct.STP, lev - item.level, 0);
+                        } else {
+                            Err.report(18);
+                        }
+
                     } else {
                         Err.report(34);
                     }
                 }
             }
+
             if (sym == Symbol.rparen) {
                 nextSym();//读进 ')'
             } else {
@@ -507,9 +547,9 @@ public class Parser {
                     interp.gen(Fct.JMP, 0, whileStartAddr); // 循环体结束后跳转到判断条件
 
                     // 填写 while 名字表信息
-                    Table.Item item = table.get(whileTx0);
-                    item.adr = whileStartAddr;
-                    item.size = dx;
+//                    Table.Item item = table.get(whileTx0);
+//                    item.adr = whileStartAddr;
+//                    item.size = dx;
                     interp.setCode(calStartAddr, Fct.JPC, 0, interp.cx); // 回填内存分配大小
                     interp.setCode(calStartAddr + 2, Fct.INT, lev, dx); // 回填内存分配大小
 
@@ -664,54 +704,232 @@ public class Parser {
         int i = table.position(lex.id);
         Table.Item item = table.get(i);
 
+        switch (item.kind) {
+            case variable:
+                nextSym();
+                break;
+            case array:
+                nextSym();
+                parseArrayRef(lev, fsys);
+                break;
+            case struct:
+                nextSym();
+                parseStructRef(lev, fsys);
+                break;
+            default:
+                Err.report(18);
+                break;
+        }
+
         if (sym == Symbol.becomes) {
             nextSym(); //读进 '='
             parseExpression(lev, fsys);
-            interp.gen(Fct.STO, lev - item.level, item.adr);
+            switch (item.kind) {
+                case variable -> interp.gen(Fct.STO, lev - item.level, item.adr);
+                case array, struct -> interp.gen(Fct.STP, lev - item.level, 0);
+                default -> Err.report(18);
+            }
+        } else {
+            Err.report(56);
+        }
+    }
+
+    private void parseArrayRef(int lev, SymSet fsys) {
+        int i = table.position(lex.id);
+        Table.Item item = table.get(i);
+
+        if (sym == Symbol.lbracket) {
+            nextSym();
+            interp.gen(Fct.LIT, 0, item.adr);
+            parseExpression(lev, fsys);
+            interp.gen(Fct.OPR, 0, 2);
+            if (sym == Symbol.rbracket) {
+                nextSym();
+            } else {
+                Err.report(45); // 缺少"]"
+            }
+        } else {
+            Err.report(44); // 缺少"["
+        }
+    }
+
+    private void parseStructRef(int lev, SymSet fsys) {
+        int i = table.position(lex.id);
+        Table.Item item = table.get(i);
+
+        if (sym == Symbol.period) {
+            nextSym();
+            if (sym == Symbol.ident) {
+                if (item.memberList.containsKey(lex.id)) {
+                    Table.Item memberName = item.memberList.get(lex.id);
+
+                    if (memberName.kind == Objekt.variable) {
+                        interp.gen(Fct.LIT, 0, item.adr + memberName.adr);
+                        nextSym();
+                    } else if (memberName.kind == Objekt.array) {
+                        nextSym();
+                        if (sym == Symbol.lbracket) {
+                            nextSym();
+                            parseExpression(lev, fsys);
+                            interp.gen(Fct.LIT, 0, item.adr + memberName.adr);
+                            interp.gen(Fct.OPR, 0, 2);
+                            if (sym == Symbol.rbracket) {
+                                nextSym();
+                            } else {
+                                Err.report(45);// 缺少"]"
+                            }
+                        } else {
+                            Err.report(44); // 缺少"["
+                        }
+                    }
+                } else {
+                    Err.report(61);
+                }
+            } else {
+                Err.report(60);
+            }
+        } else {
+            Err.report(59);
         }
     }
 
     private void parseDeclareStatement(int lev, SymSet fsys) {
         int i;
-        Table.Item item;
+        Table.Item itemi;
 
         if (sym == Symbol.ident) {
-            table.enter(Objekt.variable, lev, dx);
+            table.enter(Objekt.unknown, lev, dx);
             dx++;
             i = table.position(lex.id);
+            itemi = table.get(i);
+
             nextSym();//读进 '=' 或者 ‘:’
             if (sym == Symbol.becomes) {
+                itemi.kind = Objekt.variable;
                 nextSym(); //读进 Expression
                 parseExpression(lev, fsys);
-                item = table.get(i);
-//                System.out.println("name:" + item.name);
-                interp.gen(Fct.STO, lev - item.level, item.adr);
+                interp.gen(Fct.STO, lev - itemi.level, itemi.adr);
             } else if (sym == Symbol.colon) {
-                table.enter(Objekt.array, lev, dx);
-                dx++;
+                nextSym(); //读进 '[' or struct
 
-                nextSym(); //读进 ArraySuffix
-                parseArraySuffix(lev, fsys);
-                if (sym == Symbol.becomes) {
+                int s = table.position(lex.id);
+                Table.Item items = table.get(s);
+
+                if (sym == Symbol.lbracket) {
+                    // array
+                    itemi.kind = Objekt.array;
+                    nextSym();//读入数组长度
+                    if (sym == Symbol.number) {
+                        if (lex.num > L25.arraymax || lex.num <= 0) {
+                            Err.report(41);
+                        } else {
+                            dx += lex.num - 1;
+                            itemi.size = lex.num;
+                            nextSym();
+                            if (sym == Symbol.rbracket) {
+                                nextSym();
+                            } else {
+                                Err.report(43);
+                            }
+                        }
+                    } else {
+                        Err.report(51);
+                    }
+
+                    if (sym == Symbol.becomes) {
+                        nextSym();
+                        parseArrayInitExpression(lev, i, fsys);
+                    }
+
+                } else if (sym == Symbol.ident && items.kind == Objekt.struct && !items.structDeclared) {
+                    // struct
+                    itemi.kind = Objekt.struct;
+                    itemi.size = items.size;
+                    itemi.memberList = items.memberList;
+                    itemi.structDeclared = true;
+                    dx += itemi.size - 1;
+
                     nextSym();
-                    parseArrayInitExpression(lev, fsys);
+                    if (sym == Symbol.becomes) {
+                        nextSym();
+                        parseStructInitExpression(lev, i, fsys);
+                    }
+
+                } else {
+                    Err.report(42);
                 }
+            } else {
+                itemi.kind = Objekt.variable;
             }
-
-
         } else {
             Err.report(13);
         }
     }
 
-    private void parseArrayInitExpression(int lev, SymSet fsys) {
-        if (sym == Symbol.lbracket) {
+    private void parseStructInitExpression(int lev, int i, SymSet fsys) {
+        Table.Item item;
+        int cnt;
+
+        if (sym == Symbol.lbrace) {
+            item = table.get(i);
+            cnt = 0;
+
             nextSym();//读进 Expression
             parseExpression(lev, fsys);
+
+            cnt++;
+            interp.gen(Fct.STO, 0, item.adr + cnt - 1);
 
             while (sym == Symbol.comma) {
                 nextSym();//读进 ','
                 parseExpression(lev, fsys);
+
+                cnt++;
+                interp.gen(Fct.STO, 0, item.adr + cnt - 1);
+            }
+
+            if (cnt < item.size) {
+                Err.report(49);
+            } else if (cnt > item.size) {
+                Err.report(50);
+            }
+
+            if (sym == Symbol.rbrace) {
+                nextSym();
+            } else {
+                Err.report(48);
+            }
+        } else {
+            Err.report(47);
+        }
+    }
+
+    private void parseArrayInitExpression(int lev, int i, SymSet fsys) {
+        Table.Item item;
+        int cnt;
+
+        if (sym == Symbol.lbracket) {
+            item = table.get(i);
+            cnt = 0;
+
+            nextSym();//读进 Expression
+            parseExpression(lev, fsys);
+
+            cnt++;
+            interp.gen(Fct.STO, 0, item.adr + cnt - 1);
+
+            while (sym == Symbol.comma) {
+                nextSym();//读进 ','
+                parseExpression(lev, fsys);
+
+                cnt++;
+                interp.gen(Fct.STO, 0, item.adr + cnt - 1);
+            }
+
+            if (cnt < item.size) {
+                Err.report(54);
+            } else if (cnt > item.size) {
+                Err.report(55);
             }
 
             if (sym == Symbol.rbracket) {
@@ -719,55 +937,6 @@ public class Parser {
             } else {
                 Err.report(43);
             }
-        } else {
-            Err.report(42);
-        }
-    }
-
-    private void parseArraySuffix(int lev, SymSet fsys) {
-        int dx0 = dx;
-        int cx0;
-        int tx0;
-        dx = 0;
-        int i = table.position(lex.id);
-        Table.Item item = table.get(i);
-        tx0 = table.tx;                  // 记录本层名字的初始位置（以便恢复）
-
-        cx0 = interp.cx;
-        table.get(table.tx).adr = interp.cx;
-        interp.gen(Fct.INT, 0, 0);
-
-        if (sym == Symbol.lbracket) {
-            nextSym();//读进 number
-
-            if (sym == Symbol.number) {
-                dx = lex.num;
-                if (lex.num > L25.amax) {
-                    Err.report(41);
-                    lex.num = 0;
-                }
-                interp.gen(Fct.INT, 0, dx);
-
-                nextSym();
-                if (sym == Symbol.rbracket) {
-                    nextSym();
-
-                    item.adr = cx0;                    // 当前过程代码地址
-                    item.size = dx;                          // 声明部分中每增加一条声明都会给dx增加1，
-                    interp.code[cx0].a = dx;
-                    // 声明部分已经结束，dx就是当前过程的堆栈帧大小
-
-                    table.debugTable(tx0);
-
-                    dx = dx0;                            // 恢复堆栈帧计数器
-                    table.tx = tx0;                        // 回复名字表位置
-                } else {
-                    Err.report(43);
-                }
-            } else {
-                Err.report(51);
-            }
-
         } else {
             Err.report(42);
         }
@@ -854,24 +1023,17 @@ public class Parser {
                         interp.gen(Fct.LOD, lev - item.level, item.adr);
                         nextSym();//读进 var
                     } else if (item.kind == Objekt.function) {
-
                         nextSym();//读进 func_call
                         parseFuncCallStatement(lev, fsys);
                         interp.gen(Fct.CAL, item.paramsize, item.adr);
                     } else if (item.kind == Objekt.array) {
                         nextSym();//读进 '['
-                        if (sym == Symbol.lbracket) {
-                            nextSym(); // 读进 Expression
-                            parseExpression(lev, fsys);
-                            if (sym == Symbol.rbracket) {
-                                interp.gen(Fct.LOD, lev - item.level, item.adr);
-                                nextSym();
-                            } else {
-                                Err.report(45);
-                            }
-                        } else {
-                            Err.report(44);
-                        }
+                        parseArrayRef(lev, fsys);
+                        interp.gen(Fct.LOS, lev - item.level, 0);
+                    } else if (item.kind == Objekt.struct) {
+                        nextSym();//读进 '.'
+                        parseStructRef(lev, fsys);
+                        interp.gen(Fct.LOS, lev - item.level, 0);
                     } else {
                         Err.report(19);
                     }

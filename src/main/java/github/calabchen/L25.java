@@ -15,6 +15,8 @@ public class L25 {
     public static final int nmax = 14;      // number的最大位数
     public static final int norw = 32;      // 关键字个数
     public static final int txmax = 100;    // 名字表容量
+    public static final int arraymax = 100;    // 数组最大长度
+    public static final int membermax = 10;    // 结构体最大成员数
 
     // 一些全局变量，其他关键的变量分布如下：
     // cx, code : Interpreter

@@ -4,7 +4,7 @@ package github.calabchen;
  * 类P-Code指令类型
  */
 enum Fct {
-    LIT, OPR, LOD, STO, CAL, INT, JMP, JPC, RET, HLT
+    LIT, OPR, LOD, STO, CAL, INT, JMP, JPC, RET, HLT, STP, LOS
 }
 
 /**
@@ -242,7 +242,7 @@ public class Interpreter {
                         int newBase = s[b + 1]; // 动态链（调用者基址）
                         int returnAddress = s[b + 2]; // 返回地址
                         // 计算调用者栈顶位置（调用前栈顶 + 返回值）
-                        t = b ;
+                        t = b;
                         s[t] = returnValue; // 将返回值放到调用者栈顶
                         b = newBase; // 恢复调用者基址
                         p = returnAddress; // 设置返回地址
@@ -250,6 +250,31 @@ public class Interpreter {
                     break;
                 case HLT:
                     return;
+                case STP:             // 将次栈顶值作为地址，将栈顶的值存储到该地址
+//                    if (s[t - 1] + b > i.a + i.l || s[t - 1] + b < i.a) {
+//                        Err.report(57);  // 数组越界
+//                    }
+//                    s[s[t - 1] + b] = s[t];
+//                    t--;
+                    int level_diff1 = i.l;
+                    int value1 = s[t];
+                    int offset1 = s[t - 1];
+                    t -= 2;
+                    int frame_base1 = base(level_diff1, s, b);
+                    s[frame_base1 + offset1] = value1;
+                    break;
+                case LOS:             // l 表示数组长度，a表示数组基址
+//                    if (s[t] + b > i.a + i.l || s[t] + b <= i.a) {
+//                        Err.report(57); // 数组越界
+//                    }
+//                    int tmp = s[t];
+//                    t++;
+//                    s[t] = s[tmp + b];
+                    int level_diff2 = i.l;
+                    int offset2 = s[t];
+                    int frame_base2 = base(level_diff2, s, b);
+                    s[t] = s[frame_base2 + offset2];
+                    break;
             }
         } while (p != 0);
     }

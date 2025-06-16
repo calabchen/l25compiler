@@ -1,10 +1,12 @@
 package github.calabchen;
 
+import java.util.HashMap;
+
 /**
  * 符号类型，为避免和Java的关键字Object冲突，改成Objekt
  */
 enum Objekt {
-    variable, function, mainfunc, array, struct
+    variable, function, mainfunc, array, struct, unknown
 }
 
 /**
@@ -13,11 +15,13 @@ enum Objekt {
 public class Table {
     public static class Item {
         String name;        // 名字
-        Objekt kind;        // 类型:  var or function
+        Objekt kind;        // 类型:  var or function or array or struct
         int level;          // 所处层
         int adr;            // 地址
         int size;           // 需要分配的数据区空间
         int paramsize;      // 形参个数，仅function使用
+        HashMap<String, Item> memberList = new HashMap<>(L25.membermax);     // 成员个数，仅struct使用
+        boolean structDeclared = false;  // 结构体使用，判断是结构体声明还是对象
     }
 
     /**
@@ -72,9 +76,14 @@ public class Table {
                 break;
             case array:                      // 数组名字
                 item.level = lev;
+                item.adr = dx;
                 break;
             case struct:                     // 结构体名字
                 item.level = lev;
+                break;
+            default:
+                item.level = lev;
+                item.adr = dx;
                 break;
         }
     }
@@ -88,8 +97,8 @@ public class Table {
         if (!L25.tableswitch)
             return;
         System.out.println("TABLE:");
-        if (start >= tx)
-            System.out.println("    NULL");
+//        if (start >= tx)
+//            System.out.println("    NULL");
 
         for (int i = start; i <= tx; i++) {
             Item currentItem = table[i];
@@ -101,7 +110,7 @@ public class Table {
                 case variable:
                     kindString = "var";
                     // 格式：序号 | kind | name | lev=level | addr=adr
-                    String varLine = String.format("%2d %5s %-10s lev=%2d addr=%3d",
+                    String varLine = String.format("%2d %6s %-10s lev=%2d addr=%3d",
                             i, kindString, name, currentItem.level, currentItem.adr);
                     System.out.println(varLine);
                     L25.fas.println(varLine);
@@ -109,7 +118,7 @@ public class Table {
                 case function:
                     kindString = "func";
                     // 格式：序号 | kind | name | lev=level | size=size
-                    String funcLine = String.format("%2d %5s %-10s lev=%2d size=%3d",
+                    String funcLine = String.format("%2d %6s %-10s lev=%2d size=%3d",
                             i, kindString, name, currentItem.level, currentItem.size);
                     System.out.println(funcLine);
                     L25.fas.println(funcLine);
@@ -117,24 +126,24 @@ public class Table {
                 case mainfunc:
                     kindString = "main";
                     // 格式：序号 | kind | name | lev=level | size=size
-                    String mainLine = String.format("%2d %5s %-10s lev=%2d size=%3d",
+                    String mainLine = String.format("%2d %6s %-10s lev=%2d size=%3d",
                             i, kindString, name, currentItem.level, currentItem.size);
                     System.out.println(mainLine);
                     L25.fas.println(mainLine);
                     break;
                 case array:
                     kindString = "array";
-                    // 格式：序号 | kind | name | lev=level | size=size
-                    String arrayLine = String.format("%2d %5s %-10s lev=%2d size=%3d",
-                            i, kindString, name, currentItem.level, currentItem.size);
+                    // 格式：序号 | kind | name | lev=level | addr=adr | size=size
+                    String arrayLine = String.format("%2d %6s %-10s lev=%2d addr=%3d size=%3d",
+                            i, kindString, name, currentItem.level, currentItem.adr, currentItem.size);
                     System.out.println(arrayLine);
                     L25.fas.println(arrayLine);
                     break;
                 case struct:
                     kindString = "struct";
-                    // 格式：序号 | kind | name | lev=level | size=size
-                    String structLine = String.format("%2d %5s %-10s lev=%2d size=%3d",
-                            i, kindString, name, currentItem.level, currentItem.size);
+                    // 格式：序号 | kind | name | lev=level | addr=adr | size=size
+                    String structLine = String.format("%2d %6s %-10s lev=%2d addr=%3d size=%3d",
+                            i, kindString, name, currentItem.level, currentItem.adr, currentItem.size);
                     System.out.println(structLine);
                     L25.fas.println(structLine);
                     break;

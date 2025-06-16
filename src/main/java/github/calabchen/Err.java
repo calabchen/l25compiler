@@ -37,7 +37,7 @@ public class Err {
         errorMessages.put(15, "program must have main function !");
         errorMessages.put(16, "missing main '{' !");
         errorMessages.put(17, "missing main '}' !");
-        errorMessages.put(18, "can not know this ident is variable or function name !");
+        errorMessages.put(18, "unknown ident name !");
         errorMessages.put(19, "can not find this ident in table");
         errorMessages.put(20, "missing if '(' !");
         errorMessages.put(21, "missing if ')' !");
@@ -60,19 +60,27 @@ public class Err {
         errorMessages.put(38, "missing factor '(' before expression !");
         errorMessages.put(39, "missing factor ')' after expression !");
         errorMessages.put(40, "missing ';' after return !");
-        errorMessages.put(41, "number is too large !");
+        errorMessages.put(41, "invaild array length !");
         errorMessages.put(42, "missing array '[' !");
         errorMessages.put(43, "missing array ']' !");
         errorMessages.put(44, "missing array element '[' !");
-        errorMessages.put(45, "missing array element '[' !");
+        errorMessages.put(45, "missing array element ']' !");
         errorMessages.put(46, "missing struct name !");
         errorMessages.put(47, "missing struct '{' !");
         errorMessages.put(48, "missing struct '}' !");
-        errorMessages.put(49, "missing struct name !");
-        errorMessages.put(50, "missing struct name !");
+        errorMessages.put(49, "struct length is too shart !");
+        errorMessages.put(50, "struct length is too large !");
         errorMessages.put(51, "missing array length !");
         errorMessages.put(52, "Exceeded the maximum allowed level of nested declarations !");
-        errorMessages.put(53, "unkown statement !");
+        errorMessages.put(53, "unknown statement !");
+        errorMessages.put(54, "array length is too shart !");
+        errorMessages.put(55, "array length is too large !");
+        errorMessages.put(56, "missing assignstmt '=' !");
+        errorMessages.put(57, "invaild array index !");
+        errorMessages.put(58, "need more than one struct member !");
+        errorMessages.put(59, "missing struct '.' !");
+        errorMessages.put(60, "need member name!");
+        errorMessages.put(61, "invaild member name!");
     }
 
     /**
