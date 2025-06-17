@@ -5,7 +5,7 @@
 Hello, this is a program for conducting a simple compiler like PL0.
 
 The requirement is to complete the **L25 extension grammar** based on the provided EBNF and implement a full compiler in Java.  
-> 📌 本次作业我是 **第三组扩展：支持一维静态数组和结构体（struct）的声明、赋值和访问使用**，完整的扩展文法定义请见 [Extension Grammar](#extension-grammar)，也可以查看语法图文档：[点击查看语法图](doc/L25ExGrpha.md)
+> 📌 本次作业我是 **第三组扩展：支持一维静态数组和结构体（struct）的声明、赋值和访问使用**，完整的扩展文法定义请见 [Extension Grammar](#extension-grammar)，也可以查看语法图文档：[点击查看语法图](doc/L25ExGrpha.md) 语法图无法被github识别，可以下载`doc/L25ExGrpha.md`或者`doc/L25ExGrpha.html`然后在本地查看
 
 ---
 
