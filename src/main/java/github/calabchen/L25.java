@@ -42,8 +42,6 @@ public class L25 {
     public static String projectRoot;
     public static String testDir;
 
-    public static String docDir;
-
     /**
      * 构造函数，初始化编译器所有组成部分
      *

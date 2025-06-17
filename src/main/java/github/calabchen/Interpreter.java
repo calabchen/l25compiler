@@ -104,7 +104,6 @@ public class Interpreter {
         int[] s = new int[stacksize];       // 栈
 
         System.out.println("start L25");
-//        t = b = p = 0;
         p = 0;
         b = 1;
         t = 0;
@@ -248,14 +247,9 @@ public class Interpreter {
                         p = returnAddress; // 设置返回地址
                     }
                     break;
-                case HLT:
+                case HLT:             //程序结束
                     return;
                 case STP:             // 将次栈顶值作为地址，将栈顶的值存储到该地址
-//                    if (s[t - 1] + b > i.a + i.l || s[t - 1] + b < i.a) {
-//                        Err.report(57);  // 数组越界
-//                    }
-//                    s[s[t - 1] + b] = s[t];
-//                    t--;
                     int level_diff1 = i.l;
                     int value1 = s[t];
                     int offset1 = s[t - 1];
@@ -263,13 +257,7 @@ public class Interpreter {
                     int frame_base1 = base(level_diff1, s, b);
                     s[frame_base1 + offset1] = value1;
                     break;
-                case LOS:             // l 表示数组长度，a表示数组基址
-//                    if (s[t] + b > i.a + i.l || s[t] + b <= i.a) {
-//                        Err.report(57); // 数组越界
-//                    }
-//                    int tmp = s[t];
-//                    t++;
-//                    s[t] = s[tmp + b];
+                case LOS:           // 加载某个偏移位置上的值到栈顶
                     int level_diff2 = i.l;
                     int offset2 = s[t];
                     int frame_base2 = base(level_diff2, s, b);

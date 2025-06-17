@@ -379,7 +379,6 @@ public class Parser {
                 if (i > 0) {
                     Table.Item item = table.get(i);
                     if (item.kind == Objekt.variable || item.kind == Objekt.array || item.kind == Objekt.struct) {
-//                        nextSym();//读进 AssignStatement
                         parseAssignStatement(lev, fsys);
                     } else if (item.kind == Objekt.function) {
                         nextSym();//读进 FuncCallStatement
@@ -479,6 +478,10 @@ public class Parser {
                             interp.gen(Fct.STO, lev - item.level, item.adr);
                         } else if (item.kind == Objekt.array) {
                             parseArrayRef(lev, fsys);
+                            interp.gen(Fct.OPR, 0, 16);
+                            interp.gen(Fct.STP, lev - item.level, 0);
+                        } else if (item.kind == Objekt.struct) {
+                            parseStructRef(lev, fsys);
                             interp.gen(Fct.OPR, 0, 16);
                             interp.gen(Fct.STP, lev - item.level, 0);
                         } else {
